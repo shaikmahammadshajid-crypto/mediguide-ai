@@ -276,7 +276,7 @@ npm start
 Public deployment URL:
 
 ```text
-Add your Render URL here after deployment.
+https://shaikmahammadshajid-crypto.github.io/mediguide-ai/
 ```
 
 ## GitHub Repository
