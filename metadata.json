@@ -1,0 +1,6 @@
+{
+  "name": "MediGuide AI",
+  "description": "Intelligent Healthcare Assistant for disease information, patient record management, AI health consultation, health dashboard, and online medicine ordering.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
