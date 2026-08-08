@@ -4,20 +4,18 @@ import {
   Activity, 
   Droplet, 
   Scale, 
-  ArrowUpRight, 
   Sparkles, 
-  Calendar, 
-  Plus, 
   CheckCircle2, 
   Clock, 
   AlertTriangle, 
   PhoneCall, 
   FileText, 
-  Pill,
   TrendingUp,
   Stethoscope,
   ChevronRight,
-  Flame
+  Save,
+  Gauge,
+  ClipboardPlus
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
@@ -31,6 +29,7 @@ interface HealthDashboardProps {
   reminders: Reminder[];
   medicalRecords: MedicalRecord[];
   diseases: Disease[];
+  onSaveHealthMetric: (metric: HealthMetric) => Promise<void>;
   onNavigate: (tab: string) => void;
   onOpenDiseaseDetail: (disease: Disease) => void;
 }
@@ -41,10 +40,22 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
   reminders,
   medicalRecords,
   diseases,
+  onSaveHealthMetric,
   onNavigate,
   onOpenDiseaseDetail
 }) => {
   const [waterGlasses, setWaterGlasses] = useState(5);
+  const [savingVitals, setSavingVitals] = useState(false);
+  const [vitalForm, setVitalForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    systolic: '',
+    diastolic: '',
+    glucose: '',
+    oxygen: '',
+    heartRate: '',
+    pulse: '',
+    weight: String(userProfile.weightKg || '')
+  });
   const targetGlasses = 8;
 
   // Calculate BMI
@@ -75,11 +86,125 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
   const oxygenData = monthlyMetrics.map(m => m.oxygenSaturationPct ?? 98);
   const pulseData = monthlyMetrics.map(m => m.pulseRateBpm ?? m.heartRateBpm);
   const latestMetric = monthlyMetrics.at(-1);
+  const latestGlucose = latestMetric?.bloodGlucoseMgDl ?? 95;
 
   const average = (values: number[]) => {
     if (!values.length) return 0;
     return Math.round(values.reduce((acc, val) => acc + val, 0) / values.length);
   };
+
+  const classifyVitals = (metric?: HealthMetric) => {
+    if (!metric) {
+      return {
+        level: 'Low Risk',
+        label: 'Stable',
+        tone: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+        bpLabel: 'Normal BP',
+        glucoseLabel: 'Normal Fasting',
+        oxygenLabel: 'Normal Oxygen',
+        heartLabel: 'Normal Pulse',
+        notes: ['Add today\'s readings to get a personal risk indication.']
+      };
+    }
+
+    const notes: string[] = [];
+    let score = 0;
+    let bpLabel = 'Normal BP';
+    let glucoseLabel = 'Normal Fasting';
+    let oxygenLabel = 'Normal Oxygen';
+    let heartLabel = 'Normal Pulse';
+    const oxygen = metric.oxygenSaturationPct ?? 98;
+    const pulse = metric.pulseRateBpm ?? metric.heartRateBpm;
+
+    if (metric.bloodPressureSystolic < 90 || metric.bloodPressureDiastolic < 60) {
+      bpLabel = 'Low BP';
+      score += 2;
+      notes.push('Blood pressure is below the usual adult range.');
+    } else if (metric.bloodPressureSystolic >= 140 || metric.bloodPressureDiastolic >= 90) {
+      bpLabel = 'High BP';
+      score += 2;
+      notes.push('Blood pressure is high; repeated readings should be reviewed.');
+    } else if (metric.bloodPressureSystolic >= 130 || metric.bloodPressureDiastolic >= 80) {
+      bpLabel = 'Average BP';
+      score += 1;
+      notes.push('Blood pressure is above the optimal range.');
+    }
+
+    if (metric.bloodGlucoseMgDl < 70) {
+      glucoseLabel = 'Low Sugar';
+      score += 2;
+      notes.push('Blood sugar is low.');
+    } else if (metric.bloodGlucoseMgDl >= 126) {
+      glucoseLabel = 'High Sugar';
+      score += 2;
+      notes.push('Fasting sugar is in a high range.');
+    } else if (metric.bloodGlucoseMgDl >= 100) {
+      glucoseLabel = 'Average Sugar';
+      score += 1;
+      notes.push('Fasting sugar is above normal range.');
+    }
+
+    if (oxygen < 92) {
+      oxygenLabel = 'High Oxygen Risk';
+      score += 3;
+      notes.push('Oxygen saturation is low; urgent medical advice may be needed.');
+    } else if (oxygen < 95) {
+      oxygenLabel = 'Low Oxygen';
+      score += 2;
+      notes.push('Oxygen saturation is below the usual healthy range.');
+    }
+
+    if (pulse < 50 || pulse > 120) {
+      heartLabel = 'High Pulse Risk';
+      score += 2;
+      notes.push('Pulse is outside the expected resting range.');
+    } else if (pulse < 60 || pulse > 100) {
+      heartLabel = 'Average Pulse';
+      score += 1;
+      notes.push('Pulse is slightly outside the usual resting range.');
+    }
+
+    if (!notes.length) notes.push('Latest readings are within common adult reference ranges.');
+
+    if (score >= 4) {
+      return {
+        level: 'High Risk',
+        label: 'Doctor Review',
+        tone: 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
+        bpLabel,
+        glucoseLabel,
+        oxygenLabel,
+        heartLabel,
+        notes
+      };
+    }
+
+    if (score >= 2) {
+      return {
+        level: 'Moderate Risk',
+        label: 'Monitor Closely',
+        tone: 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+        bpLabel,
+        glucoseLabel,
+        oxygenLabel,
+        heartLabel,
+        notes
+      };
+    }
+
+    return {
+      level: 'Low Risk',
+      label: 'Stable',
+      tone: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+      bpLabel,
+      glucoseLabel,
+      oxygenLabel,
+      heartLabel,
+      notes
+    };
+  };
+
+  const latestRisk = classifyVitals(latestMetric);
 
   const inRangeCount = (metrics: HealthMetric[], checker: (metric: HealthMetric) => boolean) => {
     if (!metrics.length) return 0;
@@ -94,6 +219,44 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
   const monthLabel = monthlyMetrics.length
     ? `${monthlyMetrics[0].date} to ${monthlyMetrics[monthlyMetrics.length - 1].date}`
     : 'No vitals logged yet';
+
+  const handleVitalChange = (field: keyof typeof vitalForm, value: string) => {
+    setVitalForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveVitals = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const systolic = Number(vitalForm.systolic);
+    const diastolic = Number(vitalForm.diastolic);
+    const glucose = Number(vitalForm.glucose);
+    const oxygen = Number(vitalForm.oxygen);
+    const heartRate = Number(vitalForm.heartRate);
+    const pulse = Number(vitalForm.pulse || vitalForm.heartRate);
+    const weight = Number(vitalForm.weight || userProfile.weightKg);
+    const heightMetersForEntry = userProfile.heightCm / 100;
+    const entryBmi = heightMetersForEntry > 0
+      ? Number((weight / (heightMetersForEntry * heightMetersForEntry)).toFixed(1))
+      : bmiNum;
+
+    const metric: HealthMetric = {
+      id: `${userProfile.uid}_${vitalForm.date}_${Date.now()}`,
+      userId: userProfile.uid,
+      date: vitalForm.date,
+      weightKg: weight,
+      bloodPressureSystolic: systolic,
+      bloodPressureDiastolic: diastolic,
+      bloodGlucoseMgDl: glucose,
+      heartRateBpm: heartRate,
+      oxygenSaturationPct: oxygen,
+      pulseRateBpm: pulse,
+      bmi: entryBmi
+    };
+
+    metric.notes = `Manual health report entry. Risk: ${classifyVitals(metric).level}`;
+    setSavingVitals(true);
+    await onSaveHealthMetric(metric);
+    setSavingVitals(false);
+  };
 
   const bpChartData = {
     labels: dates.length ? dates : ['Feb 01', 'Feb 05', 'Feb 10', 'Feb 15', 'Feb 20'],
@@ -196,7 +359,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 min-w-0 overflow-x-hidden">
       
       {/* Top Welcome & Emergency Banner */}
       <div className="bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
@@ -215,7 +378,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => onNavigate('ai-assistant')}
               className="px-4 py-2.5 rounded-xl bg-white text-teal-800 hover:bg-teal-50 text-xs font-bold shadow-md transition flex items-center gap-2"
@@ -236,7 +399,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
       </div>
 
       {/* Vitals & Summary Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 min-w-0">
         
         {/* BMI Card */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between">
@@ -268,8 +431,8 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               </span>
               <span className="text-xs font-medium text-slate-400">mmHg</span>
             </div>
-            <div className="mt-2 inline-flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              Optimal BP Range
+            <div className={`mt-2 inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${latestRisk.tone}`}>
+              {latestRisk.bpLabel}
             </div>
           </div>
         </div>
@@ -282,11 +445,11 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
           </div>
           <div className="mt-2">
             <div className="flex items-baseline space-x-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">95</span>
+              <span className="text-2xl font-bold text-slate-900 dark:text-white">{latestGlucose}</span>
               <span className="text-xs font-medium text-slate-400">mg/dL</span>
             </div>
-            <div className="mt-2 inline-flex items-center text-[10px] font-bold text-teal-600 bg-teal-50 dark:bg-teal-950/60 dark:text-teal-300 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">
-              Normal Fasting
+            <div className={`mt-2 inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${latestRisk.tone}`}>
+              {latestRisk.glucoseLabel}
             </div>
           </div>
         </div>
@@ -310,12 +473,102 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
 
       </div>
 
+      {/* Manual Health Report Upload */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)] gap-6 min-w-0">
+        <form
+          onSubmit={handleSaveVitals}
+          className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-4 min-w-0"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <ClipboardPlus className="w-5 h-5 text-teal-500" />
+                <span>Upload Daily Health Report</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Enter BP, sugar, oxygen, pulse, and weight. Your dashboard updates immediately.
+              </p>
+            </div>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-extrabold ${latestRisk.tone}`}>
+              <Gauge className="w-3.5 h-3.5" />
+              {latestRisk.level}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Date</span>
+              <input type="date" value={vitalForm.date} onChange={(e) => handleVitalChange('date', e.target.value)} required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Systolic BP</span>
+              <input type="number" min="60" max="240" value={vitalForm.systolic} onChange={(e) => handleVitalChange('systolic', e.target.value)} placeholder="120" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Diastolic BP</span>
+              <input type="number" min="40" max="140" value={vitalForm.diastolic} onChange={(e) => handleVitalChange('diastolic', e.target.value)} placeholder="80" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Fasting Sugar</span>
+              <input type="number" min="40" max="500" value={vitalForm.glucose} onChange={(e) => handleVitalChange('glucose', e.target.value)} placeholder="95" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Oxygen SpO2</span>
+              <input type="number" min="70" max="100" value={vitalForm.oxygen} onChange={(e) => handleVitalChange('oxygen', e.target.value)} placeholder="98" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Heart Rate</span>
+              <input type="number" min="35" max="220" value={vitalForm.heartRate} onChange={(e) => handleVitalChange('heartRate', e.target.value)} placeholder="72" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Pulse</span>
+              <input type="number" min="35" max="220" value={vitalForm.pulse} onChange={(e) => handleVitalChange('pulse', e.target.value)} placeholder="Same as heart" className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500">Weight</span>
+              <input type="number" min="20" max="250" step="0.1" value={vitalForm.weight} onChange={(e) => handleVitalChange('weight', e.target.value)} required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+            </label>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Reference ranges are screening indicators only. For severe symptoms, contact a doctor or emergency service.
+            </p>
+            <button type="submit" disabled={savingVitals} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-xs font-extrabold shadow-xs transition">
+              <Save className="w-4 h-4" />
+              {savingVitals ? 'Saving...' : 'Save & Analyze'}
+            </button>
+          </div>
+        </form>
+
+        <div className={`p-5 rounded-2xl border shadow-xs space-y-3 ${latestRisk.tone}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase">Latest Risk Indication</span>
+              <h3 className="text-xl font-extrabold">{latestRisk.label}</h3>
+            </div>
+            <AlertTriangle className="w-7 h-7" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
+            <span>BP: {latestRisk.bpLabel}</span>
+            <span>Sugar: {latestRisk.glucoseLabel}</span>
+            <span>Oxygen: {latestRisk.oxygenLabel}</span>
+            <span>Pulse: {latestRisk.heartLabel}</span>
+          </div>
+          <ul className="space-y-1 text-[11px] font-medium">
+            {latestRisk.notes.slice(0, 3).map((note, index) => (
+              <li key={index}>- {note}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
       {/* Main Charts & Reminders Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
         
         {/* Left 2 Cols: Blood Pressure & Vitals Trend Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="lg:col-span-2 min-w-0 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
             <div>
               <h2 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-teal-500" />
@@ -332,11 +585,11 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
             </button>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-64 w-full min-w-0 overflow-hidden">
             <Line data={bpChartData} options={chartOptions} />
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-center">
             <div>
               <span className="text-[10px] text-slate-400 block font-medium">Avg Heart Rate</span>
               <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{average(heartRateData) || 70} BPM</span>
@@ -347,7 +600,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
             </div>
             <div>
               <span className="text-[10px] text-slate-400 block font-medium">Health Risk Index</span>
-              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Low Risk</span>
+              <span className={`text-sm font-bold ${latestRisk.level === 'High Risk' ? 'text-rose-600 dark:text-rose-400' : latestRisk.level === 'Moderate Risk' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{latestRisk.level}</span>
             </div>
           </div>
         </div>
@@ -376,7 +629,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
                   key={rem.id}
                   className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-300 dark:hover:border-teal-700 transition"
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-xs">
                       {rem.type === 'Medicine' ? '💊' : rem.type === 'Water' ? '💧' : '🏃'}
                     </div>
@@ -441,7 +694,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
       </div>
 
       {/* Featured Diseases & Recent Reports Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0">
         
         {/* Featured Disease Information */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
@@ -465,7 +718,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
                 onClick={() => onOpenDiseaseDetail(dis)}
                 className="p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-900/40 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 hover:border-teal-300 dark:hover:border-teal-800 transition cursor-pointer flex justify-between items-center group"
               >
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <div className="flex items-center space-x-2">
                     <span className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400">
                       {dis.name}
@@ -474,7 +727,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
                       {dis.category}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 max-w-md">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 max-w-full">
                     {dis.overview}
                   </p>
                 </div>
@@ -505,7 +758,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
                 key={rec.id}
                 className="p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-900/40 flex items-center justify-between"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 min-w-0">
                   <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold">
                     <FileText className="w-5 h-5" />
                   </div>
@@ -521,7 +774,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
 
                 <button 
                   onClick={() => onNavigate('records')}
-                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
+                  className="shrink-0 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
                 >
                   View Report
                 </button>
@@ -544,7 +797,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               {monthlyMetrics.length} vitals entries analyzed from {monthLabel}
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
             <div className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800">
               <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 block">Normal BP</span>
               <span className="text-sm font-extrabold text-emerald-800 dark:text-emerald-200">{normalBpDays} days</span>
@@ -560,8 +813,8 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-w-0">
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3 min-w-0">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Low / High BP Pattern</h3>
@@ -569,12 +822,12 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               </div>
               <HeartPulse className="w-5 h-5 text-rose-500" />
             </div>
-            <div className="h-52">
+            <div className="h-52 min-w-0 overflow-hidden">
               <Line data={bpChartData} options={compactChartOptions} />
             </div>
           </div>
 
-          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3 min-w-0">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Heart Rate Trend</h3>
@@ -582,12 +835,12 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               </div>
               <Activity className="w-5 h-5 text-rose-500" />
             </div>
-            <div className="h-52">
+            <div className="h-52 min-w-0 overflow-hidden">
               <Line data={heartRateChartData} options={compactChartOptions} />
             </div>
           </div>
 
-          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3 min-w-0">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Oxyopulse Trend</h3>
@@ -595,7 +848,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               </div>
               <Droplet className="w-5 h-5 text-sky-500" />
             </div>
-            <div className="h-52">
+            <div className="h-52 min-w-0 overflow-hidden">
               <Line data={oxygenPulseChartData} options={oxygenPulseOptions} />
             </div>
           </div>

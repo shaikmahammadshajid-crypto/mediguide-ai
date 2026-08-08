@@ -137,11 +137,11 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
               className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs hover:shadow-md hover:border-teal-400 dark:hover:border-teal-600 transition cursor-pointer flex flex-col justify-between overflow-hidden group"
             >
               {/* Card Image Header */}
-              <div className="relative h-44 bg-slate-100 dark:bg-slate-900 overflow-hidden">
+              <div className="relative h-44 bg-white dark:bg-slate-900 overflow-hidden">
                 <img
                   src={med.image}
                   alt={med.brandName}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  className="w-full h-full object-contain p-3 group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute top-2 left-2 flex flex-col gap-1">
                   {med.prescriptionRequired && (
@@ -268,7 +268,7 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
                 <img
                   src={selectedMedModal.image}
                   alt={selectedMedModal.brandName}
-                  className="w-full sm:w-40 h-40 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+                  className="w-full sm:w-40 h-40 object-contain bg-white rounded-xl border border-slate-200 dark:border-slate-700 shrink-0 p-2"
                 />
                 <div className="space-y-1.5 flex-1">
                   <span className="text-[10px] font-bold uppercase text-teal-600 dark:text-teal-400">

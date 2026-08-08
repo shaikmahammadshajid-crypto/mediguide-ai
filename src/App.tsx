@@ -45,6 +45,7 @@ import {
   createOrder, 
   updateOrderStatus, 
   fetchHealthMetrics, 
+  saveHealthMetric,
   fetchReminders, 
   saveReminder, 
   deleteReminder 
@@ -193,6 +194,14 @@ function MediGuideApp() {
     setOrders(prev => [newOrder, ...prev]);
   };
 
+  const handleSaveHealthMetric = async (metric: HealthMetric) => {
+    await saveHealthMetric(metric);
+    setHealthMetrics(prev => {
+      const next = prev.filter((item) => item.id !== metric.id && item.date !== metric.date);
+      return [...next, metric].sort((a, b) => a.date.localeCompare(b.date));
+    });
+  };
+
   const handleLogout = async () => {
     await logoutUser();
     setUserProfile(null);
@@ -249,7 +258,7 @@ function MediGuideApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200 flex flex-col">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200 flex flex-col">
       
       {/* Navigation Header */}
       <Navbar
@@ -270,7 +279,7 @@ function MediGuideApp() {
       />
 
       {/* Main App Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-4 sm:px-6 lg:px-8 py-6 overflow-x-hidden">
         
         {currentTab === 'dashboard' && (
           <HealthDashboard
@@ -279,6 +288,7 @@ function MediGuideApp() {
             reminders={reminders}
             medicalRecords={medicalRecords}
             diseases={diseases}
+            onSaveHealthMetric={handleSaveHealthMetric}
             onNavigate={(tab) => setCurrentTab(tab)}
             onOpenDiseaseDetail={(dis) => {
               setSelectedDiseaseForModal(dis);
