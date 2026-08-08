@@ -9,13 +9,13 @@ import {
   ExternalLink, 
   Plus, 
   X, 
-  CheckCircle2, 
+  CheckCircle2,
   AlertCircle,
-  Tag,
-  Stethoscope,
   LockKeyhole,
   QrCode,
-  Copy
+  Copy,
+  Download,
+  Printer
 } from 'lucide-react';
 import { MedicalRecord, UserProfile } from '../types';
 import { analyzeReportWithAI, createSecureShare } from '../services/api';
@@ -45,6 +45,8 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
   const [selectedAnalysis, setSelectedAnalysis] = useState<{ recordTitle: string; summary: string; findings: string[]; questions: string[] } | null>(null);
   const [encryptedShareUrl, setEncryptedShareUrl] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [shareToken, setShareToken] = useState('');
+  const [shareExpiresAt, setShareExpiresAt] = useState('');
   const [isGeneratingShare, setIsGeneratingShare] = useState(false);
   const [shareError, setShareError] = useState('');
 
@@ -104,9 +106,9 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
       const savedShare = await createSecureShare(toBase64Url(encrypted), toBase64Url(iv), 30);
       const url = `${origin}${pathname}?shareToken=${savedShare.token}#key=${toBase64Url(rawKey)}`;
       const qr = await QRCode.toDataURL(url, {
-        errorCorrectionLevel: 'M',
-        margin: 1,
-        width: 220,
+        errorCorrectionLevel: 'Q',
+        margin: 3,
+        width: 360,
         color: {
           dark: '#0f172a',
           light: '#ffffff'
@@ -114,6 +116,8 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
       });
       setEncryptedShareUrl(url);
       setQrDataUrl(qr);
+      setShareToken(savedShare.token);
+      setShareExpiresAt(savedShare.expiresAt);
     } catch (err) {
       console.error('Encrypted QR generation error:', err);
       setShareError('Could not generate the encrypted QR. Please try again.');
@@ -215,7 +219,7 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
           <div>
             <h2 className="text-lg font-extrabold">Share {userProfile.fullName}'s reports by QR code</h2>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-              Generates a person-specific encrypted payload for {medicalRecords.filter((record) => record.userId === userProfile.uid).length} reports. The decrypt key is kept in the URL fragment for controlled sharing.
+              Generates a short, scan-friendly encrypted report link for {medicalRecords.filter((record) => record.userId === userProfile.uid).length} reports. Scan it or open the report directly after generating.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -236,10 +240,43 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
                 <span>Copy Secure Link</span>
               </button>
             )}
+            {encryptedShareUrl && (
+              <a
+                href={encryptedShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2.5 rounded-xl bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Open Report</span>
+              </a>
+            )}
+            {qrDataUrl && (
+              <a
+                href={qrDataUrl}
+                download={`${userProfile.fullName.replace(/\s+/g, '_')}_secure_report_qr.png`}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 border border-white/15"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download QR</span>
+              </a>
+            )}
           </div>
           {encryptedShareUrl && (
-            <p className="text-[10px] text-slate-400 break-all">
-              {encryptedShareUrl}
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-xs space-y-1">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <span className="font-bold text-teal-200">Share Token: {shareToken}</span>
+                {shareExpiresAt && <span className="text-slate-400">Expires {new Date(shareExpiresAt).toLocaleString()}</span>}
+              </div>
+              <p className="text-[10px] text-slate-400 break-all">{encryptedShareUrl}</p>
+              <p className="text-[10px] text-slate-300 flex items-center gap-1">
+                <Printer className="w-3 h-3" /> Use Open Report to generate the printable report if your camera cannot scan the QR from the screen.
+              </p>
+            </div>
+          )}
+          {!encryptedShareUrl && (
+            <p className="text-[10px] text-slate-400">
+              If you previously generated a dense QR, refresh the page and generate again. New QR links use short share tokens.
             </p>
           )}
           {shareError && (
@@ -249,12 +286,12 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
           )}
         </div>
 
-        <div className="w-full min-h-40 rounded-xl bg-white p-3 flex items-center justify-center">
+        <div className="w-full min-h-64 rounded-xl bg-white p-4 flex items-center justify-center">
           {qrDataUrl ? (
             <img
               src={qrDataUrl}
               alt={`Encrypted QR share for ${userProfile.fullName}`}
-              className="w-36 h-36 sm:w-40 sm:h-40"
+              className="w-56 h-56 sm:w-64 sm:h-64"
             />
           ) : (
             <QrCode className="w-16 h-16 text-slate-300" />

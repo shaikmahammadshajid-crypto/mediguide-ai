@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, LockKeyhole, AlertCircle, ExternalLink } from 'lucide-react';
+import { FileText, LockKeyhole, AlertCircle, ExternalLink, Printer, Download } from 'lucide-react';
 import { fetchSecureShare } from '../services/api';
 
 interface SharedRecord {
@@ -73,22 +73,71 @@ export const SecureReportShare: React.FC = () => {
     decryptShare();
   }, []);
 
+  const handleDownloadReport = () => {
+    if (!payload) return;
+
+    const reportText = [
+      `MediGuide Secure Report`,
+      `Patient: ${payload.patientName}`,
+      `Generated: ${new Date(payload.generatedAt).toLocaleString()}`,
+      '',
+      ...payload.records.flatMap((record, index) => [
+        `${index + 1}. ${record.t}`,
+        `Type: ${record.y}`,
+        `Date: ${record.d}`,
+        `Doctor: ${record.doctor || 'Doctor not listed'}`,
+        `File: ${record.file || 'File not listed'}`,
+        `Summary: ${record.summary || 'No summary available'}`,
+        ''
+      ])
+    ].join('\n');
+
+    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${payload.patientName.replace(/\s+/g, '_')}_MediGuide_Report.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-5">
         <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-700 shadow-xs">
-          <div className="flex items-center gap-2 text-teal-300 text-xs font-bold uppercase tracking-wider">
-            <LockKeyhole className="w-4 h-4" />
-            <span>Encrypted MediGuide Report Share</span>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-teal-300 text-xs font-bold uppercase tracking-wider">
+                <LockKeyhole className="w-4 h-4" />
+                <span>Encrypted MediGuide Report Share</span>
+              </div>
+              <h1 className="text-2xl font-extrabold mt-2">
+                {payload ? `${payload.patientName}'s Medical Reports` : 'Secure Medical Reports'}
+              </h1>
+              {payload && (
+                <p className="text-xs text-slate-300 mt-1">
+                  Generated {new Date(payload.generatedAt).toLocaleString()} • Access window {payload.expiresInDays} days
+                </p>
+              )}
+            </div>
+
+            {payload && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-2 rounded-xl bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-xs flex items-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" /> Print
+                </button>
+                <button
+                  onClick={handleDownloadReport}
+                  className="px-3 py-2 rounded-xl bg-teal-500 text-slate-950 hover:bg-teal-400 font-extrabold text-xs flex items-center gap-1.5"
+                >
+                  <Download className="w-4 h-4" /> Download
+                </button>
+              </div>
+            )}
           </div>
-          <h1 className="text-2xl font-extrabold mt-2">
-            {payload ? `${payload.patientName}'s Medical Reports` : 'Secure Medical Reports'}
-          </h1>
-          {payload && (
-            <p className="text-xs text-slate-300 mt-1">
-              Generated {new Date(payload.generatedAt).toLocaleString()} • Access window {payload.expiresInDays} days
-            </p>
-          )}
         </div>
 
         {error && (
