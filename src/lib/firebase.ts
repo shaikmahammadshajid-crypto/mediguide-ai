@@ -477,7 +477,19 @@ export async function updateOrderStatus(orderId: string, status: Order['orderSta
 // --- HEALTH METRICS FIRESTORE ---
 export async function fetchHealthMetrics(userId: string): Promise<HealthMetric[]> {
   const saved = localStorage.getItem(LOCAL_STORAGE_METRICS);
-  return saved ? JSON.parse(saved) : MOCK_HEALTH_METRICS;
+  if (!saved) return MOCK_HEALTH_METRICS;
+
+  const current: HealthMetric[] = JSON.parse(saved);
+  const currentUserMetrics = current.filter((metric) => metric.userId === userId);
+  if (currentUserMetrics.length >= 31) return current;
+
+  const existingDates = new Set(current.map((metric) => `${metric.userId}:${metric.date}`));
+  const backfilled = [
+    ...current,
+    ...MOCK_HEALTH_METRICS.filter((metric) => !existingDates.has(`${metric.userId}:${metric.date}`))
+  ];
+  localStorage.setItem(LOCAL_STORAGE_METRICS, JSON.stringify(backfilled));
+  return backfilled;
 }
 
 export async function saveHealthMetric(metric: HealthMetric): Promise<void> {

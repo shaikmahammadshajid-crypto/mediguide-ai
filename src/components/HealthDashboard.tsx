@@ -66,10 +66,34 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
   }
 
   // Chart Data Preparation
-  const dates = healthMetrics.map(m => m.date.slice(5));
-  const systolicData = healthMetrics.map(m => m.bloodPressureSystolic);
-  const diastolicData = healthMetrics.map(m => m.bloodPressureDiastolic);
-  const glucoseData = healthMetrics.map(m => m.bloodGlucoseMgDl);
+  const sortedMetrics = [...healthMetrics].sort((a, b) => a.date.localeCompare(b.date));
+  const monthlyMetrics = sortedMetrics.slice(-31);
+  const dates = monthlyMetrics.map(m => m.date.slice(5));
+  const systolicData = monthlyMetrics.map(m => m.bloodPressureSystolic);
+  const diastolicData = monthlyMetrics.map(m => m.bloodPressureDiastolic);
+  const heartRateData = monthlyMetrics.map(m => m.heartRateBpm);
+  const oxygenData = monthlyMetrics.map(m => m.oxygenSaturationPct ?? 98);
+  const pulseData = monthlyMetrics.map(m => m.pulseRateBpm ?? m.heartRateBpm);
+  const latestMetric = monthlyMetrics.at(-1);
+
+  const average = (values: number[]) => {
+    if (!values.length) return 0;
+    return Math.round(values.reduce((acc, val) => acc + val, 0) / values.length);
+  };
+
+  const inRangeCount = (metrics: HealthMetric[], checker: (metric: HealthMetric) => boolean) => {
+    if (!metrics.length) return 0;
+    return metrics.filter(checker).length;
+  };
+
+  const normalBpDays = inRangeCount(monthlyMetrics, m => m.bloodPressureSystolic >= 90 && m.bloodPressureSystolic < 130 && m.bloodPressureDiastolic >= 60 && m.bloodPressureDiastolic < 80);
+  const highBpDays = inRangeCount(monthlyMetrics, m => m.bloodPressureSystolic >= 130 || m.bloodPressureDiastolic >= 80);
+  const lowBpDays = inRangeCount(monthlyMetrics, m => m.bloodPressureSystolic < 90 || m.bloodPressureDiastolic < 60);
+  const normalHeartDays = inRangeCount(monthlyMetrics, m => m.heartRateBpm >= 60 && m.heartRateBpm <= 100);
+  const lowOxygenDays = inRangeCount(monthlyMetrics, m => (m.oxygenSaturationPct ?? 98) < 95);
+  const monthLabel = monthlyMetrics.length
+    ? `${monthlyMetrics[0].date} to ${monthlyMetrics[monthlyMetrics.length - 1].date}`
+    : 'No vitals logged yet';
 
   const bpChartData = {
     labels: dates.length ? dates : ['Feb 01', 'Feb 05', 'Feb 10', 'Feb 15', 'Feb 20'],
@@ -95,6 +119,47 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
     ]
   };
 
+  const heartRateChartData = {
+    labels: dates.length ? dates : ['Feb 01', 'Feb 05', 'Feb 10', 'Feb 15', 'Feb 20'],
+    datasets: [
+      {
+        label: 'Heart Rate (BPM)',
+        data: heartRateData.length ? heartRateData : [72, 68, 70, 71, 69],
+        borderColor: 'rgb(244, 63, 94)',
+        backgroundColor: 'rgba(244, 63, 94, 0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+      }
+    ]
+  };
+
+  const oxygenPulseChartData = {
+    labels: dates.length ? dates : ['Feb 01', 'Feb 05', 'Feb 10', 'Feb 15', 'Feb 20'],
+    datasets: [
+      {
+        label: 'Oxygen Saturation (%)',
+        data: oxygenData.length ? oxygenData : [98, 99, 98, 99, 99],
+        borderColor: 'rgb(14, 165, 233)',
+        backgroundColor: 'rgba(14, 165, 233, 0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        yAxisID: 'oxygen',
+      },
+      {
+        label: 'Pulse (BPM)',
+        data: pulseData.length ? pulseData : [72, 68, 70, 71, 69],
+        borderColor: 'rgb(234, 88, 12)',
+        backgroundColor: 'rgba(234, 88, 12, 0.05)',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 3,
+        yAxisID: 'pulse',
+      }
+    ]
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -105,6 +170,28 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
     scales: {
       y: { min: 60, max: 150, grid: { color: 'rgba(226, 232, 240, 0.5)' } },
       x: { grid: { display: false } }
+    }
+  };
+
+  const compactChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' as const, labels: { boxWidth: 12, font: { size: 10 } } },
+      tooltip: { cornerRadius: 8, padding: 10 }
+    },
+    scales: {
+      y: { grid: { color: 'rgba(226, 232, 240, 0.45)' } },
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }
+    }
+  };
+
+  const oxygenPulseOptions = {
+    ...compactChartOptions,
+    scales: {
+      oxygen: { type: 'linear' as const, min: 90, max: 100, position: 'left' as const, grid: { color: 'rgba(226, 232, 240, 0.45)' } },
+      pulse: { type: 'linear' as const, min: 50, max: 110, position: 'right' as const, grid: { drawOnChartArea: false } },
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }
     }
   };
 
@@ -176,7 +263,9 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
           </div>
           <div className="mt-2">
             <div className="flex items-baseline space-x-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">120/78</span>
+              <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                {latestMetric ? `${latestMetric.bloodPressureSystolic}/${latestMetric.bloodPressureDiastolic}` : '120/78'}
+              </span>
               <span className="text-xs font-medium text-slate-400">mmHg</span>
             </div>
             <div className="mt-2 inline-flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
@@ -250,11 +339,11 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
           <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-center">
             <div>
               <span className="text-[10px] text-slate-400 block font-medium">Avg Heart Rate</span>
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-200">70 BPM</span>
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{average(heartRateData) || 70} BPM</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 block font-medium">Oxygen Saturation</span>
-              <span className="text-sm font-bold text-teal-600 dark:text-teal-400">99% SpO2</span>
+              <span className="text-sm font-bold text-teal-600 dark:text-teal-400">{average(oxygenData) || 99}% SpO2</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 block font-medium">Health Risk Index</span>
@@ -441,6 +530,97 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
           </div>
         </div>
 
+      </div>
+
+      {/* One Month Vitals Analysis */}
+      <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-teal-500" />
+              <span>Minimum 1 Month Health Report Analysis</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {monthlyMetrics.length} vitals entries analyzed from {monthLabel}
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800">
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 block">Normal BP</span>
+              <span className="text-sm font-extrabold text-emerald-800 dark:text-emerald-200">{normalBpDays} days</span>
+            </div>
+            <div className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+              <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 block">High BP</span>
+              <span className="text-sm font-extrabold text-rose-800 dark:text-rose-200">{highBpDays} days</span>
+            </div>
+            <div className="px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+              <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 block">Low BP</span>
+              <span className="text-sm font-extrabold text-blue-800 dark:text-blue-200">{lowBpDays} days</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Low / High BP Pattern</h3>
+                <p className="text-[11px] text-slate-500">Avg {average(systolicData) || 120}/{average(diastolicData) || 78} mmHg</p>
+              </div>
+              <HeartPulse className="w-5 h-5 text-rose-500" />
+            </div>
+            <div className="h-52">
+              <Line data={bpChartData} options={compactChartOptions} />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Heart Rate Trend</h3>
+                <p className="text-[11px] text-slate-500">{normalHeartDays} days in 60-100 BPM range</p>
+              </div>
+              <Activity className="w-5 h-5 text-rose-500" />
+            </div>
+            <div className="h-52">
+              <Line data={heartRateChartData} options={compactChartOptions} />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Oxyopulse Trend</h3>
+                <p className="text-[11px] text-slate-500">{lowOxygenDays} low oxygen days below 95%</p>
+              </div>
+              <Droplet className="w-5 h-5 text-sky-500" />
+            </div>
+            <div className="h-52">
+              <Line data={oxygenPulseChartData} options={oxygenPulseOptions} />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700">
+            <span className="text-[10px] text-slate-400 font-bold uppercase">Average Pulse</span>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-white">{average(pulseData) || 70} BPM</div>
+          </div>
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700">
+            <span className="text-[10px] text-slate-400 font-bold uppercase">Average Oxygen</span>
+            <div className="text-lg font-extrabold text-sky-600 dark:text-sky-300">{average(oxygenData) || 99}%</div>
+          </div>
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700">
+            <span className="text-[10px] text-slate-400 font-bold uppercase">Fasting Glucose</span>
+            <div className="text-lg font-extrabold text-teal-600 dark:text-teal-300">{average(monthlyMetrics.map(m => m.bloodGlucoseMgDl)) || 95} mg/dL</div>
+          </div>
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700">
+            <span className="text-[10px] text-slate-400 font-bold uppercase">Clinical Signal</span>
+            <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-300">
+              {highBpDays > 7 || lowOxygenDays > 0 ? 'Review' : 'Stable'}
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>

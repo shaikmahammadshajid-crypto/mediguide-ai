@@ -11,7 +11,10 @@ import {
   CheckCircle2, 
   AlertCircle,
   Tag,
-  Stethoscope
+  Stethoscope,
+  LockKeyhole,
+  QrCode,
+  Copy
 } from 'lucide-react';
 import { MedicalRecord, UserProfile } from '../types';
 import { analyzeReportWithAI } from '../services/api';
@@ -37,6 +40,57 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
   const [reportText, setReportText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState<string | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState<{ recordTitle: string; summary: string; findings: string[]; questions: string[] } | null>(null);
+  const [encryptedShareUrl, setEncryptedShareUrl] = useState('');
+  const [isGeneratingShare, setIsGeneratingShare] = useState(false);
+
+  const toBase64Url = (bytes: Uint8Array) => {
+    let binary = '';
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+
+  const handleGenerateEncryptedQr = async () => {
+    setIsGeneratingShare(true);
+    try {
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+      const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const sharePayload = {
+        patientId: userProfile.uid,
+        patientName: userProfile.fullName,
+        generatedAt: new Date().toISOString(),
+        expiresInDays: 30,
+        records: medicalRecords
+          .filter((record) => record.userId === userProfile.uid)
+          .map((record) => ({
+            id: record.id,
+            title: record.title,
+            type: record.type,
+            date: record.date,
+            doctorName: record.doctorName,
+            fileName: record.fileName,
+            aiSummary: record.aiSummary,
+            keyFindings: record.keyFindings
+          }))
+      };
+      const encrypted = new Uint8Array(await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encoder.encode(JSON.stringify(sharePayload))
+      ));
+      const origin = window.location.origin || 'https://mediguide.ai';
+      const pathname = window.location.pathname || '/';
+      const url = `${origin}${pathname}?patientShare=${toBase64Url(encrypted)}&iv=${toBase64Url(iv)}#key=${toBase64Url(rawKey)}`;
+      setEncryptedShareUrl(url);
+    } catch (err) {
+      console.error('Encrypted QR generation error:', err);
+    } finally {
+      setIsGeneratingShare(false);
+    }
+  };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +157,58 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
           <Plus className="w-4 h-4" />
           <span>Upload Medical Report</span>
         </button>
+      </div>
+
+      {/* Encrypted Patient QR Share */}
+      <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-700 shadow-xs grid grid-cols-1 lg:grid-cols-[1fr_180px] gap-4 items-center">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-teal-300 text-xs font-bold uppercase tracking-wider">
+            <LockKeyhole className="w-4 h-4" />
+            <span>AES-256 Encrypted Patient Report Share</span>
+          </div>
+          <div>
+            <h2 className="text-lg font-extrabold">Share {userProfile.fullName}'s reports by QR code</h2>
+            <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+              Generates a person-specific encrypted payload for {medicalRecords.filter((record) => record.userId === userProfile.uid).length} reports. The decrypt key is kept in the URL fragment for controlled sharing.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={handleGenerateEncryptedQr}
+              disabled={isGeneratingShare}
+              className="px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>{isGeneratingShare ? 'Encrypting...' : 'Generate Patient QR'}</span>
+            </button>
+            {encryptedShareUrl && (
+              <button
+                onClick={() => navigator.clipboard?.writeText(encryptedShareUrl)}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 border border-white/15"
+              >
+                <Copy className="w-4 h-4" />
+                <span>Copy Secure Link</span>
+              </button>
+            )}
+          </div>
+          {encryptedShareUrl && (
+            <p className="text-[10px] text-slate-400 break-all">
+              {encryptedShareUrl}
+            </p>
+          )}
+        </div>
+
+        <div className="w-full min-h-40 rounded-xl bg-white p-3 flex items-center justify-center">
+          {encryptedShareUrl ? (
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(encryptedShareUrl)}`}
+              alt={`Encrypted QR share for ${userProfile.fullName}`}
+              className="w-36 h-36 sm:w-40 sm:h-40"
+            />
+          ) : (
+            <QrCode className="w-16 h-16 text-slate-300" />
+          )}
+        </div>
       </div>
 
       {/* Records Cards Grid */}

@@ -150,9 +150,14 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({ orders }) => {
 
                     {/* Shipping Address & Actions */}
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
-                      <div className="text-slate-500">
+                      <div className="text-slate-500 space-y-1">
                         <span className="font-bold text-slate-800 dark:text-slate-200 block">Delivery Address:</span>
                         <span>{order.deliveryAddress}</span>
+                        {order.prescriptionRequired && (
+                          <span className="block">
+                            Prescription uploaded: <span className="font-bold text-emerald-700 dark:text-emerald-300">{order.prescriptionFileName || 'Attached'}</span>
+                          </span>
+                        )}
                       </div>
 
                       <button

@@ -114,6 +114,9 @@ export interface Order {
   createdAt: string;
   estimatedDelivery: string;
   invoiceUrl?: string;
+  prescriptionRequired?: boolean;
+  prescriptionFileName?: string;
+  prescriptionUploadedAt?: string;
 }
 
 export interface HealthMetric {
@@ -125,6 +128,8 @@ export interface HealthMetric {
   bloodPressureDiastolic: number;
   bloodGlucoseMgDl: number;
   heartRateBpm: number;
+  oxygenSaturationPct?: number;
+  pulseRateBpm?: number;
   bmi: number;
   notes?: string;
 }

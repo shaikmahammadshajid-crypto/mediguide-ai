@@ -46,7 +46,7 @@ app.get("/api/health", (req, res) => {
 // AI Chat Consultation Endpoint
 app.post("/api/ai/chat", async (req, res) => {
   try {
-    const { message, history = [], patientProfile } = req.body;
+    const { message, history = [], patientProfile, language } = req.body;
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "Message is required." });
@@ -74,6 +74,10 @@ app.post("/api/ai/chat", async (req, res) => {
         reply = `Hello! I am **MediGuide AI**, your intelligent healthcare assistant.\n\nBased on your query regarding "${message}", here is evidence-based guidance:\n\n1. **General Care:** Ensure proper rest, balanced nutrition, and hydration.\n2. **Monitoring:** Track any changing symptoms, duration, and pain severity.\n3. **When to see a Doctor:** Schedule an appointment if symptoms persist for more than 48-72 hours or worsen.\n\n*Note: MediGuide AI provides health information for educational purposes. Always consult a licensed physician for diagnosis and treatments.*`;
       }
 
+      if (language && language !== "en-IN") {
+        reply += `\n\nVoice language selected: ${language}. Configure GEMINI_API_KEY for full translated medical responses in this language.`;
+      }
+
       return res.json({
         reply,
         emergencyWarning: isEmergencyPrompt,
@@ -90,7 +94,11 @@ app.post("/api/ai/chat", async (req, res) => {
       contextStr = `\nPatient Context: Age ${patientProfile.age || "N/A"}, Gender ${patientProfile.gender || "N/A"}, Existing Conditions: ${patientProfile.existingDiseases || "None listed"}, Allergies: ${patientProfile.allergies || "None listed"}.`;
     }
 
-    const fullPrompt = `${SYSTEM_PROMPT}${contextStr}\n\nUser Question: ${message}`;
+    const languageInstruction = language
+      ? `\nRespond in the user's selected language/locale (${language}) while keeping medical emergency numbers and medicine names clear. If a medical term is hard to translate, include the English term in parentheses.`
+      : "";
+
+    const fullPrompt = `${SYSTEM_PROMPT}${contextStr}${languageInstruction}\n\nUser Question: ${message}`;
 
     const response = await gemini.models.generateContent({
       model: "gemini-3.6-flash",

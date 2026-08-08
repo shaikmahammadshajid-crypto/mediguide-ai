@@ -15,7 +15,10 @@ import {
   ShieldCheck,
   Building,
   Sparkles,
-  QrCode
+  QrCode,
+  UploadCloud,
+  FileCheck,
+  AlertCircle
 } from 'lucide-react';
 import { CartItem, Medicine, Order, UserProfile } from '../types';
 
@@ -44,6 +47,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [deliveryAddress, setDeliveryAddress] = useState(userProfile.address || 'Flat 402, Green Park Extension, Hauz Khas, New Delhi - 110016');
   const [phone, setPhone] = useState(userProfile.phoneNumber || '+91 98765 43210');
   const [paymentMethod, setPaymentMethod] = useState<'UPI (GPay / PhonePe / Paytm)' | 'Net Banking' | 'Credit/Debit Card' | 'Cash on Delivery (COD)'>('UPI (GPay / PhonePe / Paytm)');
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
+  const [prescriptionError, setPrescriptionError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
 
@@ -53,10 +58,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const shippingFee = subtotal > 300 ? 0 : 35.00;
   const tax = subtotal * 0.05; // 5% GST on pharmaceutical products in India
   const totalAmount = subtotal + shippingFee + tax;
+  const prescriptionRequiredForOrder = cartItems.some((item) => item.medicine.prescriptionRequired || item.medicine.dosageForm === 'Tablet');
 
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (prescriptionRequiredForOrder && !prescriptionFile) {
+      setPrescriptionError('Upload the doctor-prescribed prescription before booking tablets or Rx medicines.');
+      setStep('checkout');
+      return;
+    }
+
     setIsSubmitting(true);
+    setPrescriptionError('');
 
     setTimeout(() => {
       const newOrder: Order = {
@@ -75,12 +88,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         orderStatus: 'Placed',
         trackingNumber: 'TRK-IND-' + Date.now().toString().slice(-7),
         createdAt: new Date().toISOString(),
-        estimatedDelivery: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().split('T')[0]
+        estimatedDelivery: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        prescriptionRequired: prescriptionRequiredForOrder,
+        prescriptionFileName: prescriptionFile?.name,
+        prescriptionUploadedAt: prescriptionFile ? new Date().toISOString() : undefined
       };
 
       setPlacedOrder(newOrder);
       onOrderPlaced(newOrder);
       onClearCart();
+      setPrescriptionFile(null);
       setIsSubmitting(false);
       setStep('confirmation');
     }, 1200);
@@ -135,6 +152,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         <span className="text-[10px] text-slate-400 block truncate">
                           {item.medicine.dosageForm} • {item.medicine.strength}
                         </span>
+                        {(item.medicine.prescriptionRequired || item.medicine.dosageForm === 'Tablet') && (
+                          <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5 inline-flex items-center gap-1 mt-1">
+                            <FileCheck className="w-2.5 h-2.5" /> Prescription needed
+                          </span>
+                        )}
                         <span className="font-extrabold text-teal-600 dark:text-teal-400 block mt-1">
                           ₹{(item.medicine.estimatedPrice * item.quantity).toFixed(2)}
                         </span>
@@ -232,6 +254,41 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   ))}
                 </div>
               </div>
+
+              {prescriptionRequiredForOrder && (
+                <div className="space-y-2">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <UploadCloud className="w-4 h-4 text-teal-500" /> Doctor Prescription Upload
+                  </h4>
+                  <label className={`block p-3 rounded-xl border border-dashed cursor-pointer transition ${
+                    prescriptionFile
+                      ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
+                      : 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200'
+                  }`}>
+                    <input
+                      type="file"
+                      required={prescriptionRequiredForOrder}
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      onChange={(e) => {
+                        setPrescriptionFile(e.target.files?.[0] || null);
+                        setPrescriptionError('');
+                      }}
+                      className="sr-only"
+                    />
+                    <span className="font-bold block">
+                      {prescriptionFile ? prescriptionFile.name : 'Upload prescription PDF or image'}
+                    </span>
+                    <span className="text-[10px] block mt-0.5">
+                      Required for tablets and prescription medicines before the order can be booked.
+                    </span>
+                  </label>
+                  {prescriptionError && (
+                    <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> {prescriptionError}
+                    </p>
+                  )}
+                </div>
+              )}
             </form>
           )}
 
@@ -258,6 +315,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <div className="text-[11px] text-slate-500">
                   Delivery Address: {placedOrder.deliveryAddress}
                 </div>
+                {placedOrder.prescriptionRequired && (
+                  <div className="text-[11px] text-slate-500">
+                    Prescription: <span className="font-bold text-emerald-700 dark:text-emerald-300">{placedOrder.prescriptionFileName}</span>
+                  </div>
+                )}
               </div>
 
               <button
@@ -313,8 +375,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </button>
                 <button
                   onClick={handleCheckoutSubmit}
-                  disabled={isSubmitting}
-                  className="w-2/3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1"
+                  disabled={isSubmitting || (prescriptionRequiredForOrder && !prescriptionFile)}
+                  className="w-2/3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:text-slate-500 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1"
                 >
                   {isSubmitting ? (
                     <span>Processing Order...</span>

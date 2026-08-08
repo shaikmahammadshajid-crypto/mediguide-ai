@@ -739,13 +739,36 @@ export const MOCK_RECORDS: MedicalRecord[] = [
   }
 ];
 
-export const MOCK_HEALTH_METRICS: HealthMetric[] = [
-  { id: 'm1', userId: 'demo_patient_123', date: '2025-02-01', weightKg: 69.2, bloodPressureSystolic: 128, bloodPressureDiastolic: 82, bloodGlucoseMgDl: 96, heartRateBpm: 72, bmi: 23.4 },
-  { id: 'm2', userId: 'demo_patient_123', date: '2025-02-05', weightKg: 68.8, bloodPressureSystolic: 124, bloodPressureDiastolic: 80, bloodGlucoseMgDl: 94, heartRateBpm: 68, bmi: 23.2 },
-  { id: 'm3', userId: 'demo_patient_123', date: '2025-02-10', weightKg: 68.5, bloodPressureSystolic: 122, bloodPressureDiastolic: 78, bloodGlucoseMgDl: 92, heartRateBpm: 70, bmi: 23.1 },
-  { id: 'm4', userId: 'demo_patient_123', date: '2025-02-15', weightKg: 68.2, bloodPressureSystolic: 120, bloodPressureDiastolic: 78, bloodGlucoseMgDl: 95, heartRateBpm: 71, bmi: 23.0 },
-  { id: 'm5', userId: 'demo_patient_123', date: '2025-02-20', weightKg: 68.0, bloodPressureSystolic: 118, bloodPressureDiastolic: 76, bloodGlucoseMgDl: 91, heartRateBpm: 69, bmi: 22.9 }
+const monthVitalsSeed = [
+  [128, 82, 72, 98, 96, 69.2], [126, 81, 71, 98, 95, 69.1], [129, 83, 74, 97, 99, 69.0],
+  [125, 80, 70, 98, 94, 68.9], [124, 80, 68, 99, 94, 68.8], [127, 82, 73, 98, 97, 68.8],
+  [123, 79, 69, 99, 93, 68.7], [122, 78, 70, 98, 92, 68.6], [121, 78, 71, 98, 94, 68.6],
+  [124, 79, 72, 97, 96, 68.5], [122, 78, 70, 98, 92, 68.5], [120, 77, 68, 99, 91, 68.4],
+  [119, 76, 69, 99, 90, 68.4], [123, 79, 72, 98, 95, 68.3], [120, 78, 71, 98, 95, 68.2],
+  [118, 76, 69, 99, 91, 68.2], [117, 75, 68, 99, 90, 68.1], [121, 77, 70, 98, 93, 68.1],
+  [119, 76, 69, 98, 91, 68.0], [118, 76, 69, 99, 91, 68.0], [122, 78, 72, 98, 94, 68.1],
+  [120, 77, 70, 98, 92, 68.0], [119, 76, 69, 99, 91, 67.9], [118, 75, 68, 99, 90, 67.9],
+  [121, 78, 71, 98, 93, 67.9], [119, 76, 70, 98, 92, 67.8], [118, 76, 69, 99, 91, 67.8],
+  [117, 75, 68, 99, 90, 67.8], [120, 77, 70, 98, 92, 67.9], [119, 76, 69, 99, 91, 67.8],
+  [118, 75, 68, 99, 90, 67.8]
 ];
+
+export const MOCK_HEALTH_METRICS: HealthMetric[] = monthVitalsSeed.map((reading, index) => {
+  const [systolic, diastolic, heartRate, oxygen, glucose, weight] = reading;
+  return {
+    id: `m${index + 1}`,
+    userId: 'demo_patient_123',
+    date: `2025-03-${String(index + 1).padStart(2, '0')}`,
+    weightKg: weight,
+    bloodPressureSystolic: systolic,
+    bloodPressureDiastolic: diastolic,
+    bloodGlucoseMgDl: glucose,
+    heartRateBpm: heartRate,
+    oxygenSaturationPct: oxygen,
+    pulseRateBpm: heartRate,
+    bmi: Number((weight / (1.72 * 1.72)).toFixed(1))
+  };
+});
 
 export const MOCK_REMINDERS: Reminder[] = [
   { id: 'rem_1', userId: 'demo_patient_123', title: 'Amlokind 5mg Tablet', type: 'Medicine', time: '08:00 AM', frequency: 'Daily', active: true, dosageDetails: '1 Tablet with morning water' },
@@ -779,6 +802,9 @@ export const MOCK_ORDERS: Order[] = [
     orderStatus: 'Out for Delivery',
     trackingNumber: 'TRK-IND-8839210',
     createdAt: '2025-02-22T14:30:00.000Z',
-    estimatedDelivery: '2025-02-24'
+    estimatedDelivery: '2025-02-24',
+    prescriptionRequired: true,
+    prescriptionFileName: 'Cardio_Prescription_Jan2025.pdf',
+    prescriptionUploadedAt: '2025-02-22T14:25:00.000Z'
   }
 ];

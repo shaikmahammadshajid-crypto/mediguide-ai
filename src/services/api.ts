@@ -3,13 +3,14 @@ import { ChatMessage, UserProfile } from '../types';
 export async function sendChatMessage(
   message: string, 
   history: ChatMessage[] = [], 
-  patientProfile?: UserProfile
+  patientProfile?: UserProfile,
+  language?: string
 ): Promise<{ reply: string; emergencyWarning?: boolean }> {
   try {
     const res = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history, patientProfile })
+      body: JSON.stringify({ message, history, patientProfile, language })
     });
 
     if (!res.ok) {

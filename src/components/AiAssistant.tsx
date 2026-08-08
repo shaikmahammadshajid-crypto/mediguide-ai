@@ -3,18 +3,17 @@ import {
   Bot, 
   Send, 
   Sparkles, 
-  AlertTriangle, 
   Volume2, 
   Copy, 
   Check, 
   User, 
-  FileText, 
-  Stethoscope, 
   ShieldAlert, 
   RefreshCw,
   HelpCircle,
   PhoneCall,
-  Activity
+  Mic,
+  MicOff,
+  Languages
 } from 'lucide-react';
 import { ChatMessage, UserProfile } from '../types';
 import { sendChatMessage } from '../services/api';
@@ -24,6 +23,20 @@ interface AiAssistantProps {
 }
 
 export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
+  const languageOptions = [
+    { code: 'en-IN', label: 'English' },
+    { code: 'hi-IN', label: 'Hindi' },
+    { code: 'te-IN', label: 'Telugu' },
+    { code: 'ta-IN', label: 'Tamil' },
+    { code: 'kn-IN', label: 'Kannada' },
+    { code: 'ml-IN', label: 'Malayalam' },
+    { code: 'mr-IN', label: 'Marathi' },
+    { code: 'bn-IN', label: 'Bengali' },
+    { code: 'gu-IN', label: 'Gujarati' },
+    { code: 'pa-IN', label: 'Punjabi' },
+    { code: 'ur-IN', label: 'Urdu' }
+  ];
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome_msg',
@@ -36,7 +49,11 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
   const [loading, setLoading] = useState(false);
   const [emergencyAlert, setEmergencyAlert] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState('en-IN');
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const presetPrompts = [
     "I have a sudden headache & mild nausea. What should I do?",
@@ -70,7 +87,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
     setLoading(true);
 
     try {
-      const response = await sendChatMessage(text, messages, userProfile);
+      const response = await sendChatMessage(text, messages, userProfile, selectedLanguage);
 
       const botMsg: ChatMessage = {
         id: 'msg_bot_' + Date.now(),
@@ -112,9 +129,53 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
       window.speechSynthesis.cancel();
       const cleanText = text.replace(/[*#_]/g, '');
       const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = selectedLanguage;
       utterance.rate = 0.95;
       window.speechSynthesis.speak(utterance);
     }
+  };
+
+  const handleToggleListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError('Voice input is not supported in this browser. Try Chrome or Edge.');
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = selectedLanguage;
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setVoiceError('');
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInputMessage(transcript.trim());
+    };
+
+    recognition.onerror = (event: any) => {
+      setVoiceError(event.error === 'not-allowed' ? 'Microphone permission was blocked.' : 'Voice input stopped. Please try again.');
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   return (
@@ -136,28 +197,81 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Evidence-based healthcare education, symptom analysis & report explainer
+              Multilingual voice healthcare education, symptom analysis & report explainer
             </p>
           </div>
         </div>
 
-        <button 
-          onClick={() => {
-            setMessages([{
-              id: 'reset_' + Date.now(),
-              role: 'assistant',
-              content: `Chat history cleared. How can I assist you with your health today, ${userProfile.fullName}?`,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }]);
-            setEmergencyAlert(false);
-          }}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition text-xs font-semibold flex items-center gap-1"
-          title="Clear Conversation"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span className="hidden sm:inline">Reset</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <label className="hidden sm:flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <Languages className="w-4 h-4 text-teal-500" />
+            <select
+              value={selectedLanguage}
+              onChange={(e) => {
+                setSelectedLanguage(e.target.value);
+                window.speechSynthesis?.cancel();
+              }}
+              className="bg-transparent outline-none text-xs font-bold"
+            >
+              {languageOptions.map((language) => (
+                <option key={language.code} value={language.code}>{language.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            onClick={handleToggleListening}
+            className={`p-2 rounded-lg transition text-xs font-semibold flex items-center gap-1 ${
+              isListening
+                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                : 'text-slate-500 hover:text-teal-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+            title={isListening ? 'Stop voice input' : 'Start voice input'}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isListening ? 'Listening' : 'Voice'}</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              setMessages([{
+                id: 'reset_' + Date.now(),
+                role: 'assistant',
+                content: `Chat history cleared. How can I assist you with your health today, ${userProfile.fullName}?`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }]);
+              setEmergencyAlert(false);
+            }}
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition text-xs font-semibold flex items-center gap-1"
+            title="Clear Conversation"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Reset</span>
+          </button>
+        </div>
       </div>
+
+      <div className="sm:hidden bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+          <Languages className="w-4 h-4 text-teal-500" />
+          <select
+            value={selectedLanguage}
+            onChange={(e) => setSelectedLanguage(e.target.value)}
+            className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 outline-none"
+          >
+            {languageOptions.map((language) => (
+              <option key={language.code} value={language.code}>{language.label}</option>
+            ))}
+          </select>
+        </label>
+        <span className="text-[10px] text-slate-400">Voice input and read-aloud use this language.</span>
+      </div>
+
+      {voiceError && (
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs font-semibold text-amber-800 dark:text-amber-200">
+          {voiceError}
+        </div>
+      )}
 
       {/* Emergency Alert Banner if triggered */}
       {emergencyAlert && (
@@ -286,11 +400,23 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
           }}
           className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2"
         >
+          <button
+            type="button"
+            onClick={handleToggleListening}
+            className={`p-2.5 rounded-xl border font-semibold text-xs transition ${
+              isListening
+                ? 'bg-rose-600 border-rose-600 text-white animate-pulse'
+                : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600'
+            }`}
+            title={isListening ? 'Stop listening' : `Speak in ${languageOptions.find((language) => language.code === selectedLanguage)?.label || 'selected language'}`}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
           <input
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Ask about symptoms, diseases, report terms, or medicines..."
+            placeholder={isListening ? 'Listening... speak your health question' : 'Ask about symptoms, diseases, report terms, or medicines...'}
             className="flex-1 px-4 py-2.5 text-xs sm:text-sm bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white"
           />
           <button
