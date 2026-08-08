@@ -156,6 +156,17 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({ orders }) => {
                         {order.prescriptionRequired && (
                           <span className="block">
                             Prescription uploaded: <span className="font-bold text-emerald-700 dark:text-emerald-300">{order.prescriptionFileName || 'Attached'}</span>
+                            {order.prescriptionFileSize && <span> ({order.prescriptionFileSize})</span>}
+                            {order.prescriptionFileDataUrl && (
+                              <a
+                                href={order.prescriptionFileDataUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 font-bold text-teal-700 dark:text-teal-300 hover:underline"
+                              >
+                                View
+                              </a>
+                            )}
                           </span>
                         )}
                       </div>

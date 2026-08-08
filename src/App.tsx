@@ -51,12 +51,17 @@ import {
 import { INITIAL_PATIENT_PROFILE, MOCK_APPOINTMENTS } from './data/mockData';
 
 export default function App() {
-  const isSecureReportShare = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('patientShare');
+  const isSecureReportShare = typeof window !== 'undefined'
+    && (new URLSearchParams(window.location.search).has('patientShare') || new URLSearchParams(window.location.search).has('shareToken'));
 
   if (isSecureReportShare) {
     return <SecureReportShare />;
   }
 
+  return <MediGuideApp />;
+}
+
+function MediGuideApp() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PATIENT_PROFILE);

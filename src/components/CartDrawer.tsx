@@ -48,6 +48,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [phone, setPhone] = useState(userProfile.phoneNumber || '+91 98765 43210');
   const [paymentMethod, setPaymentMethod] = useState<'UPI (GPay / PhonePe / Paytm)' | 'Net Banking' | 'Credit/Debit Card' | 'Cash on Delivery (COD)'>('UPI (GPay / PhonePe / Paytm)');
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
+  const [prescriptionFileDataUrl, setPrescriptionFileDataUrl] = useState<string | null>(null);
   const [prescriptionError, setPrescriptionError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
@@ -59,6 +60,40 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const tax = subtotal * 0.05; // 5% GST on pharmaceutical products in India
   const totalAmount = subtotal + shippingFee + tax;
   const prescriptionRequiredForOrder = cartItems.some((item) => item.medicine.prescriptionRequired || item.medicine.dosageForm === 'Tablet');
+  const allowedPrescriptionTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  const handlePrescriptionSelect = async (file: File | null) => {
+    setPrescriptionError('');
+    setPrescriptionFile(null);
+    setPrescriptionFileDataUrl(null);
+
+    if (!file) return;
+
+    if (!allowedPrescriptionTypes.includes(file.type)) {
+      setPrescriptionError('Upload a valid prescription file: PDF, PNG, JPG, or WEBP.');
+      return;
+    }
+
+    if (file.size > 2.5 * 1024 * 1024) {
+      setPrescriptionError('Prescription file must be under 2.5 MB.');
+      return;
+    }
+
+    setPrescriptionFile(file);
+    setPrescriptionFileDataUrl(await readFileAsDataUrl(file));
+  };
 
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +126,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         estimatedDelivery: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().split('T')[0],
         prescriptionRequired: prescriptionRequiredForOrder,
         prescriptionFileName: prescriptionFile?.name,
+        prescriptionFileSize: prescriptionFile ? formatFileSize(prescriptionFile.size) : undefined,
+        prescriptionFileDataUrl: prescriptionFileDataUrl || undefined,
         prescriptionUploadedAt: prescriptionFile ? new Date().toISOString() : undefined
       };
 
@@ -98,6 +135,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       onOrderPlaced(newOrder);
       onClearCart();
       setPrescriptionFile(null);
+      setPrescriptionFileDataUrl(null);
       setIsSubmitting(false);
       setStep('confirmation');
     }, 1200);
@@ -117,14 +155,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           type="file"
           required={prescriptionRequiredForOrder}
           accept=".pdf,.png,.jpg,.jpeg,.webp"
-          onChange={(e) => {
-            setPrescriptionFile(e.target.files?.[0] || null);
-            setPrescriptionError('');
-          }}
+          onChange={(e) => handlePrescriptionSelect(e.target.files?.[0] || null)}
           className="sr-only"
         />
         <span className="font-bold block">
-          {prescriptionFile ? prescriptionFile.name : 'Choose prescription PDF or image'}
+          {prescriptionFile ? `${prescriptionFile.name} (${formatFileSize(prescriptionFile.size)})` : 'Choose prescription PDF or image'}
         </span>
         <span className="text-[10px] block mt-0.5">
           Required before booking tablets and prescription medicines.
@@ -321,6 +356,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 {placedOrder.prescriptionRequired && (
                   <div className="text-[11px] text-slate-500">
                     Prescription: <span className="font-bold text-emerald-700 dark:text-emerald-300">{placedOrder.prescriptionFileName}</span>
+                    {placedOrder.prescriptionFileSize && <span> ({placedOrder.prescriptionFileSize})</span>}
                   </div>
                 )}
               </div>

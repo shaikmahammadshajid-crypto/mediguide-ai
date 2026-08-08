@@ -38,6 +38,8 @@ export interface MedicalRecord {
   fileUrl: string;
   fileName: string;
   fileSize?: string;
+  uploadedAt?: string;
+  encrypted?: boolean;
   aiSummary?: string;
   keyFindings?: string[];
   tags?: string[];
@@ -116,6 +118,8 @@ export interface Order {
   invoiceUrl?: string;
   prescriptionRequired?: boolean;
   prescriptionFileName?: string;
+  prescriptionFileSize?: string;
+  prescriptionFileDataUrl?: string;
   prescriptionUploadedAt?: string;
 }
 

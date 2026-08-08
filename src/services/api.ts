@@ -74,6 +74,32 @@ export async function analyzeReportWithAI(
   }
 }
 
+export async function createSecureShare(
+  encrypted: string,
+  iv: string,
+  expiresInDays = 30
+): Promise<{ token: string; expiresAt: string }> {
+  const res = await fetch('/api/secure-shares', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ encrypted, iv, expiresInDays })
+  });
+
+  if (!res.ok) {
+    throw new Error(`Secure share API returned HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchSecureShare(token: string): Promise<{ encrypted: string; iv: string; expiresAt: string; createdAt: string }> {
+  const res = await fetch(`/api/secure-shares/${encodeURIComponent(token)}`);
+  if (!res.ok) {
+    throw new Error(`Secure share API returned HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function checkSymptomsWithAI(
   symptoms: string,
   duration: string,

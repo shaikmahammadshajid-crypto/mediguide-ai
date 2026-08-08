@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, LockKeyhole, AlertCircle, ExternalLink } from 'lucide-react';
+import { fetchSecureShare } from '../services/api';
 
 interface SharedRecord {
   i: string;
@@ -34,9 +35,16 @@ export const SecureReportShare: React.FC = () => {
     async function decryptShare() {
       try {
         const params = new URLSearchParams(window.location.search);
-        const encrypted = params.get('patientShare');
-        const iv = params.get('iv');
+        const token = params.get('shareToken');
+        let encrypted = params.get('patientShare');
+        let iv = params.get('iv');
         const keyParam = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('key');
+
+        if (token) {
+          const share = await fetchSecureShare(token);
+          encrypted = share.encrypted;
+          iv = share.iv;
+        }
 
         if (!encrypted || !iv || !keyParam) {
           setError('This secure report link is missing encrypted share data.');

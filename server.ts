@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import { randomUUID } from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -10,6 +11,24 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: "10mb" }));
+
+type SecureShareEntry = {
+  encrypted: string;
+  iv: string;
+  expiresAt: number;
+  createdAt: string;
+};
+
+const secureShares = new Map<string, SecureShareEntry>();
+
+function pruneExpiredShares() {
+  const now = Date.now();
+  for (const [token, share] of secureShares.entries()) {
+    if (share.expiresAt <= now) {
+      secureShares.delete(token);
+    }
+  }
+}
 
 // Initialize Gemini Client safely
 let ai: GoogleGenAI | null = null;
@@ -41,6 +60,40 @@ CRITICAL SAFETY & MEDICAL RULES:
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "MediGuide AI Backend", timestamp: new Date().toISOString() });
+});
+
+app.post("/api/secure-shares", (req, res) => {
+  const { encrypted, iv, expiresInDays = 30 } = req.body;
+  if (!encrypted || !iv || typeof encrypted !== "string" || typeof iv !== "string") {
+    return res.status(400).json({ error: "Encrypted payload and IV are required." });
+  }
+
+  pruneExpiredShares();
+  const token = randomUUID().replace(/-/g, "").slice(0, 18);
+  const expiresAt = Date.now() + Math.min(Math.max(Number(expiresInDays) || 30, 1), 30) * 24 * 60 * 60 * 1000;
+  secureShares.set(token, {
+    encrypted,
+    iv,
+    expiresAt,
+    createdAt: new Date().toISOString()
+  });
+
+  res.json({ token, expiresAt: new Date(expiresAt).toISOString() });
+});
+
+app.get("/api/secure-shares/:token", (req, res) => {
+  pruneExpiredShares();
+  const share = secureShares.get(req.params.token);
+  if (!share) {
+    return res.status(404).json({ error: "Secure report share was not found or has expired." });
+  }
+
+  res.json({
+    encrypted: share.encrypted,
+    iv: share.iv,
+    expiresAt: new Date(share.expiresAt).toISOString(),
+    createdAt: share.createdAt
+  });
 });
 
 // AI Chat Consultation Endpoint
