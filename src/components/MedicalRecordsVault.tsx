@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import QRCode from 'qrcode';
 import { 
   FolderHeart, 
   UploadCloud, 
@@ -41,7 +42,9 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState<string | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState<{ recordTitle: string; summary: string; findings: string[]; questions: string[] } | null>(null);
   const [encryptedShareUrl, setEncryptedShareUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [isGeneratingShare, setIsGeneratingShare] = useState(false);
+  const [shareError, setShareError] = useState('');
 
   const toBase64Url = (bytes: Uint8Array) => {
     let binary = '';
@@ -53,6 +56,7 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
 
   const handleGenerateEncryptedQr = async () => {
     setIsGeneratingShare(true);
+    setShareError('');
     try {
       const encoder = new TextEncoder();
       const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
@@ -66,14 +70,14 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
         records: medicalRecords
           .filter((record) => record.userId === userProfile.uid)
           .map((record) => ({
-            id: record.id,
-            title: record.title,
-            type: record.type,
-            date: record.date,
-            doctorName: record.doctorName,
-            fileName: record.fileName,
-            aiSummary: record.aiSummary,
-            keyFindings: record.keyFindings
+            i: record.id,
+            t: record.title,
+            y: record.type,
+            d: record.date,
+            doctor: record.doctorName,
+            file: record.fileName,
+            url: record.fileUrl,
+            summary: record.aiSummary?.slice(0, 180)
           }))
       };
       const encrypted = new Uint8Array(await crypto.subtle.encrypt(
@@ -84,9 +88,20 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
       const origin = window.location.origin || 'https://mediguide.ai';
       const pathname = window.location.pathname || '/';
       const url = `${origin}${pathname}?patientShare=${toBase64Url(encrypted)}&iv=${toBase64Url(iv)}#key=${toBase64Url(rawKey)}`;
+      const qr = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 220,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff'
+        }
+      });
       setEncryptedShareUrl(url);
+      setQrDataUrl(qr);
     } catch (err) {
       console.error('Encrypted QR generation error:', err);
+      setShareError('Could not generate the encrypted QR. Please try again.');
     } finally {
       setIsGeneratingShare(false);
     }
@@ -196,12 +211,17 @@ export const MedicalRecordsVault: React.FC<MedicalRecordsVaultProps> = ({
               {encryptedShareUrl}
             </p>
           )}
+          {shareError && (
+            <p className="text-[11px] font-bold text-rose-300 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> {shareError}
+            </p>
+          )}
         </div>
 
         <div className="w-full min-h-40 rounded-xl bg-white p-3 flex items-center justify-center">
-          {encryptedShareUrl ? (
+          {qrDataUrl ? (
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(encryptedShareUrl)}`}
+              src={qrDataUrl}
               alt={`Encrypted QR share for ${userProfile.fullName}`}
               className="w-36 h-36 sm:w-40 sm:h-40"
             />

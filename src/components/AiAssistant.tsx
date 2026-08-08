@@ -54,6 +54,8 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
   const [voiceError, setVoiceError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
+  const listenTimeoutRef = useRef<number | null>(null);
 
   const presetPrompts = [
     "I have a sudden headache & mild nausea. What should I do?",
@@ -70,6 +72,13 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort?.();
+      if (listenTimeoutRef.current) window.clearTimeout(listenTimeoutRef.current);
+    };
+  }, []);
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = textToSend || inputMessage.trim();
@@ -138,7 +147,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
   const handleToggleListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setVoiceError('Voice input is not supported in this browser. Try Chrome or Edge.');
+      setVoiceError('Voice input needs Chrome or Edge with microphone permission enabled.');
       return;
     }
 
@@ -150,28 +159,53 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ userProfile }) => {
     const recognition = new SpeechRecognition();
     recognition.lang = selectedLanguage;
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      transcriptRef.current = '';
       setVoiceError('');
       setIsListening(true);
+      if (listenTimeoutRef.current) window.clearTimeout(listenTimeoutRef.current);
+      listenTimeoutRef.current = window.setTimeout(() => {
+        recognition.stop();
+      }, 15000);
     };
 
     recognition.onresult = (event: any) => {
-      let transcript = '';
+      let transcript = transcriptRef.current;
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        transcript += event.results[i][0].transcript;
+        const phrase = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          transcript = `${transcript} ${phrase}`.trim();
+          transcriptRef.current = transcript;
+        } else {
+          setInputMessage(`${transcript} ${phrase}`.trim());
+        }
       }
-      setInputMessage(transcript.trim());
+      if (transcript) setInputMessage(transcript);
     };
 
     recognition.onerror = (event: any) => {
-      setVoiceError(event.error === 'not-allowed' ? 'Microphone permission was blocked.' : 'Voice input stopped. Please try again.');
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setVoiceError('Microphone permission is blocked. Allow microphone access in the browser address bar and try again.');
+      } else if (event.error === 'network') {
+        setVoiceError('Speech recognition service is unavailable. Type your question or try again on Chrome.');
+      } else if (event.error !== 'no-speech') {
+        setVoiceError('Voice input paused. Tap the mic and speak close to the device.');
+      }
       setIsListening(false);
     };
 
     recognition.onend = () => {
+      if (listenTimeoutRef.current) {
+        window.clearTimeout(listenTimeoutRef.current);
+        listenTimeoutRef.current = null;
+      }
       setIsListening(false);
+      if (!transcriptRef.current.trim()) {
+        setVoiceError('No speech was detected. Tap the mic, allow access, and speak clearly.');
+      }
     };
 
     recognitionRef.current = recognition;

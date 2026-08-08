@@ -103,6 +103,41 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }, 1200);
   };
 
+  const prescriptionUploadBox = prescriptionRequiredForOrder ? (
+    <div className="space-y-2">
+      <h4 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+        <UploadCloud className="w-4 h-4 text-teal-500" /> Doctor Prescription Upload
+      </h4>
+      <label className={`block p-3 rounded-xl border border-dashed cursor-pointer transition ${
+        prescriptionFile
+          ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
+          : 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200'
+      }`}>
+        <input
+          type="file"
+          required={prescriptionRequiredForOrder}
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          onChange={(e) => {
+            setPrescriptionFile(e.target.files?.[0] || null);
+            setPrescriptionError('');
+          }}
+          className="sr-only"
+        />
+        <span className="font-bold block">
+          {prescriptionFile ? prescriptionFile.name : 'Choose prescription PDF or image'}
+        </span>
+        <span className="text-[10px] block mt-0.5">
+          Required before booking tablets and prescription medicines.
+        </span>
+      </label>
+      {prescriptionError && (
+        <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+          <AlertCircle className="w-3.5 h-3.5" /> {prescriptionError}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-800 w-full max-w-md h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-700">
@@ -190,6 +225,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </div>
                     </div>
                   ))}
+                  {prescriptionUploadBox}
                 </div>
               )}
             </>
@@ -255,40 +291,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               </div>
 
-              {prescriptionRequiredForOrder && (
-                <div className="space-y-2">
-                  <h4 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <UploadCloud className="w-4 h-4 text-teal-500" /> Doctor Prescription Upload
-                  </h4>
-                  <label className={`block p-3 rounded-xl border border-dashed cursor-pointer transition ${
-                    prescriptionFile
-                      ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
-                      : 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200'
-                  }`}>
-                    <input
-                      type="file"
-                      required={prescriptionRequiredForOrder}
-                      accept=".pdf,.png,.jpg,.jpeg,.webp"
-                      onChange={(e) => {
-                        setPrescriptionFile(e.target.files?.[0] || null);
-                        setPrescriptionError('');
-                      }}
-                      className="sr-only"
-                    />
-                    <span className="font-bold block">
-                      {prescriptionFile ? prescriptionFile.name : 'Upload prescription PDF or image'}
-                    </span>
-                    <span className="text-[10px] block mt-0.5">
-                      Required for tablets and prescription medicines before the order can be booked.
-                    </span>
-                  </label>
-                  {prescriptionError && (
-                    <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5" /> {prescriptionError}
-                    </p>
-                  )}
-                </div>
-              )}
+              {prescriptionUploadBox}
             </form>
           )}
 
@@ -357,7 +360,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
             {step === 'cart' && (
               <button
-                onClick={() => setStep('checkout')}
+                onClick={() => {
+                  if (prescriptionRequiredForOrder && !prescriptionFile) {
+                    setPrescriptionError('Upload the doctor-prescribed prescription before continuing.');
+                    return;
+                  }
+                  setStep('checkout');
+                }}
                 className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs shadow-md transition"
               >
                 Proceed to Checkout (₹{totalAmount.toFixed(2)})

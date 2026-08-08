@@ -11,6 +11,7 @@ import { MedicalRecordsVault } from './components/MedicalRecordsVault';
 import { RemindersManager } from './components/RemindersManager';
 import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
+import { SecureReportShare } from './components/SecureReportShare';
 
 import { 
   UserProfile, 
@@ -50,6 +51,12 @@ import {
 import { INITIAL_PATIENT_PROFILE, MOCK_APPOINTMENTS } from './data/mockData';
 
 export default function App() {
+  const isSecureReportShare = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('patientShare');
+
+  if (isSecureReportShare) {
+    return <SecureReportShare />;
+  }
+
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PATIENT_PROFILE);
