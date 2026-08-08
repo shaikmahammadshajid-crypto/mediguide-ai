@@ -96,23 +96,23 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
   const classifyVitals = (metric?: HealthMetric) => {
     if (!metric) {
       return {
-        level: 'Low Risk',
-        label: 'Stable',
-        tone: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+        level: 'Low / Needs Attention',
+        label: 'Add Today\'s Reading',
+        tone: 'text-yellow-800 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800',
         bpLabel: 'Normal BP',
-        glucoseLabel: 'Normal Fasting',
+        glucoseLabel: 'Normal Sugar',
         oxygenLabel: 'Normal Oxygen',
-        heartLabel: 'Normal Pulse',
-        notes: ['Add today\'s readings to get a personal risk indication.']
+        heartLabel: 'Normal Heartbeat',
+        notes: ['Add today\'s readings to see a simple health indication.']
       };
     }
 
     const notes: string[] = [];
     let score = 0;
-    let bpLabel = 'Normal BP';
-    let glucoseLabel = 'Normal Fasting';
+    let bpLabel = 'Average BP';
+    let glucoseLabel = 'Average Sugar';
     let oxygenLabel = 'Normal Oxygen';
-    let heartLabel = 'Normal Pulse';
+    let heartLabel = 'Average Heartbeat';
     const oxygen = metric.oxygenSaturationPct ?? 98;
     const pulse = metric.pulseRateBpm ?? metric.heartRateBpm;
 
@@ -145,7 +145,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
     }
 
     if (oxygen < 92) {
-      oxygenLabel = 'High Oxygen Risk';
+      oxygenLabel = 'Very Low Oxygen';
       score += 3;
       notes.push('Oxygen saturation is low; urgent medical advice may be needed.');
     } else if (oxygen < 95) {
@@ -155,7 +155,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
     }
 
     if (pulse < 50 || pulse > 120) {
-      heartLabel = 'High Pulse Risk';
+      heartLabel = 'Very High/Low Heartbeat';
       score += 2;
       notes.push('Pulse is outside the expected resting range.');
     } else if (pulse < 60 || pulse > 100) {
@@ -170,7 +170,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
       return {
         level: 'High Risk',
         label: 'Doctor Review',
-        tone: 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
+        tone: 'text-orange-800 bg-orange-50 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800',
         bpLabel,
         glucoseLabel,
         oxygenLabel,
@@ -181,9 +181,9 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
 
     if (score >= 2) {
       return {
-        level: 'Moderate Risk',
+        level: 'Low / Needs Attention',
         label: 'Monitor Closely',
-        tone: 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+        tone: 'text-yellow-800 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800',
         bpLabel,
         glucoseLabel,
         oxygenLabel,
@@ -193,8 +193,8 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
     }
 
     return {
-      level: 'Low Risk',
-      label: 'Stable',
+      level: 'Average / Normal',
+      label: 'Looks Normal',
       tone: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
       bpLabel,
       glucoseLabel,
@@ -486,7 +486,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
                 <span>Upload Daily Health Report</span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Enter BP, sugar, oxygen, pulse, and weight. Your dashboard updates immediately.
+                Enter the numbers from your BP machine, sugar test, oximeter, and weighing scale.
               </p>
             </div>
             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-extrabold ${latestRisk.tone}`}>
@@ -501,38 +501,45 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               <input type="date" value={vitalForm.date} onChange={(e) => handleVitalChange('date', e.target.value)} required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Systolic BP</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">BP Upper Number</span>
               <input type="number" min="60" max="240" value={vitalForm.systolic} onChange={(e) => handleVitalChange('systolic', e.target.value)} placeholder="120" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">First BP number, example 120/80</span>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Diastolic BP</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">BP Lower Number</span>
               <input type="number" min="40" max="140" value={vitalForm.diastolic} onChange={(e) => handleVitalChange('diastolic', e.target.value)} placeholder="80" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">Second BP number, example 120/80</span>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Fasting Sugar</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">Sugar Reading</span>
               <input type="number" min="40" max="500" value={vitalForm.glucose} onChange={(e) => handleVitalChange('glucose', e.target.value)} placeholder="95" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">Blood sugar value in mg/dL</span>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Oxygen SpO2</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">Oxygen Percentage</span>
               <input type="number" min="70" max="100" value={vitalForm.oxygen} onChange={(e) => handleVitalChange('oxygen', e.target.value)} placeholder="98" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">Oximeter number, usually 95 to 100</span>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Heart Rate</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">Heartbeat Per Minute</span>
               <input type="number" min="35" max="220" value={vitalForm.heartRate} onChange={(e) => handleVitalChange('heartRate', e.target.value)} placeholder="72" required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">Pulse/heart number shown by device</span>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Pulse</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">Pulse, If Different</span>
               <input type="number" min="35" max="220" value={vitalForm.pulse} onChange={(e) => handleVitalChange('pulse', e.target.value)} placeholder="Same as heart" className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">Leave empty if same as heartbeat</span>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-500">Weight</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500">Weight In Kg</span>
               <input type="number" min="20" max="250" step="0.1" value={vitalForm.weight} onChange={(e) => handleVitalChange('weight', e.target.value)} required className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500" />
+              <span className="block text-[10px] text-slate-400">Current body weight</span>
             </label>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Reference ranges are screening indicators only. For severe symptoms, contact a doctor or emergency service.
+              This is a simple guide for common users. It is not a final medical diagnosis.
             </p>
             <button type="submit" disabled={savingVitals} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-xs font-extrabold shadow-xs transition">
               <Save className="w-4 h-4" />
@@ -544,7 +551,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
         <div className={`p-5 rounded-2xl border shadow-xs space-y-3 ${latestRisk.tone}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <span className="text-[10px] font-extrabold uppercase">Latest Risk Indication</span>
+              <span className="text-[10px] font-extrabold uppercase">Simple Health Status</span>
               <h3 className="text-xl font-extrabold">{latestRisk.label}</h3>
             </div>
             <AlertTriangle className="w-7 h-7" />
@@ -553,7 +560,7 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
             <span>BP: {latestRisk.bpLabel}</span>
             <span>Sugar: {latestRisk.glucoseLabel}</span>
             <span>Oxygen: {latestRisk.oxygenLabel}</span>
-            <span>Pulse: {latestRisk.heartLabel}</span>
+            <span>Heartbeat: {latestRisk.heartLabel}</span>
           </div>
           <ul className="space-y-1 text-[11px] font-medium">
             {latestRisk.notes.slice(0, 3).map((note, index) => (
@@ -599,8 +606,8 @@ export const HealthDashboard: React.FC<HealthDashboardProps> = ({
               <span className="text-sm font-bold text-teal-600 dark:text-teal-400">{average(oxygenData) || 99}% SpO2</span>
             </div>
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Health Risk Index</span>
-              <span className={`text-sm font-bold ${latestRisk.level === 'High Risk' ? 'text-rose-600 dark:text-rose-400' : latestRisk.level === 'Moderate Risk' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{latestRisk.level}</span>
+              <span className="text-[10px] text-slate-400 block font-medium">Health Status</span>
+              <span className={`text-sm font-bold ${latestRisk.level === 'High Risk' ? 'text-orange-600 dark:text-orange-400' : latestRisk.level === 'Low / Needs Attention' ? 'text-yellow-600 dark:text-yellow-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{latestRisk.level}</span>
             </div>
           </div>
         </div>
