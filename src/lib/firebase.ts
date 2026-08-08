@@ -438,7 +438,25 @@ export async function fetchMedicines(): Promise<Medicine[]> {
   }
 
   const saved = localStorage.getItem(LOCAL_STORAGE_MEDICINES);
-  return saved ? JSON.parse(saved) : MOCK_MEDICINES;
+  if (!saved) return MOCK_MEDICINES;
+
+  try {
+    const savedMedicines = JSON.parse(saved) as Medicine[];
+    const mergedById = new Map(savedMedicines.map((medicine) => [medicine.id, medicine]));
+
+    MOCK_MEDICINES.forEach((seedMedicine) => {
+      const savedMedicine = mergedById.get(seedMedicine.id);
+      mergedById.set(seedMedicine.id, savedMedicine ? { ...savedMedicine, ...seedMedicine } : seedMedicine);
+    });
+
+    const mergedMedicines = Array.from(mergedById.values());
+    localStorage.setItem(LOCAL_STORAGE_MEDICINES, JSON.stringify(mergedMedicines));
+    return mergedMedicines;
+  } catch (err) {
+    console.warn("Medicine local cache migration failed:", err);
+    localStorage.setItem(LOCAL_STORAGE_MEDICINES, JSON.stringify(MOCK_MEDICINES));
+    return MOCK_MEDICINES;
+  }
 }
 
 export async function saveMedicine(medicine: Medicine): Promise<void> {

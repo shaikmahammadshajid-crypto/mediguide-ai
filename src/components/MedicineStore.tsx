@@ -36,7 +36,12 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
   const [modalQuantity, setModalQuantity] = useState(1);
   const [addedSuccessId, setAddedSuccessId] = useState<string | null>(null);
 
-  const categories = ['All', 'Antidiabetic', 'Antihypertensive', 'Bronchodilator', 'Gastrointestinal', 'Neurology', 'Analgesic', 'Anti-allergy'];
+  const categories = [
+    'All',
+    ...Array.from(
+      new Set(medicines.map((med) => med.category.split('/')[0].trim()))
+    ).sort()
+  ];
 
   const filteredMeds = medicines.filter(m => {
     const matchesSearch = m.brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -63,13 +68,13 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
           <div>
             <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400 text-xs font-bold uppercase tracking-wider mb-1">
               <Pill className="w-4 h-4" />
-              <span>Certified Online Pharmacy & Medicine Catalog</span>
+              <span>Licensed Pharmacy Workflow & Medicine Catalog</span>
             </div>
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
               Order Prescription & OTC Medicines
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Genuine pharmaceuticals delivered with doorstep tracking and digital invoice generation.
+              Real product references, prescription upload for Rx items, doorstep tracking, and digital invoice generation.
             </p>
           </div>
 
@@ -147,6 +152,11 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
                   <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-900/80 text-white backdrop-blur-xs">
                     {med.dosageForm}
                   </span>
+                  {med.regulatorySchedule && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/90 text-slate-800 backdrop-blur-xs">
+                      {med.regulatorySchedule}
+                    </span>
+                  )}
                 </div>
 
                 <div className="absolute bottom-2 right-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 text-slate-800 dark:text-slate-200">
@@ -167,6 +177,11 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
                   <p className="text-[11px] text-slate-400 italic truncate">
                     {med.genericName} • {med.strength}
                   </p>
+                  {med.packSize && (
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                      {med.packSize}
+                    </p>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-700/80 flex items-center justify-between">
@@ -269,6 +284,29 @@ export const MedicineStore: React.FC<MedicineStoreProps> = ({
                     <Building className="w-3.5 h-3.5 text-slate-400" />
                     <span>Manufacturer: {selectedMedModal.manufacturer}</span>
                   </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {selectedMedModal.regulatorySchedule && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                        {selectedMedModal.regulatorySchedule}
+                      </span>
+                    )}
+                    {selectedMedModal.packSize && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                        {selectedMedModal.packSize}
+                      </span>
+                    )}
+                    {selectedMedModal.sourceUrl && (
+                      <a
+                        href={selectedMedModal.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100"
+                      >
+                        Product reference
+                      </a>
+                    )}
+                  </div>
 
                   <div className="pt-2 flex items-center space-x-3">
                     <span className="text-2xl font-extrabold text-slate-900 dark:text-white">

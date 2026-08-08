@@ -91,6 +91,9 @@ export interface Medicine {
   rating: number;
   reviewsCount: number;
   prescriptionRequired: boolean;
+  sourceUrl?: string;
+  regulatorySchedule?: 'OTC' | 'Rx' | 'Schedule H' | 'Schedule H1';
+  packSize?: string;
 }
 
 export interface CartItem {
