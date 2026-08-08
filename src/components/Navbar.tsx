@@ -17,7 +17,8 @@ import {
   Sparkles,
   Menu,
   X,
-  Stethoscope
+  Stethoscope,
+  LogOut
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -31,6 +32,8 @@ interface NavbarProps {
   openCart: () => void;
   onSelectRole: (role: 'patient' | 'doctor' | 'admin') => void;
   openAuthModal: () => void;
+  onLogout: () => void;
+  isAuthenticated: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -42,7 +45,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   cartCount,
   openCart,
   onSelectRole,
-  openAuthModal
+  openAuthModal,
+  onLogout,
+  isAuthenticated
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -227,13 +232,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* Login / Auth Button */}
-            <button
-              onClick={openAuthModal}
-              className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 transition shadow-xs"
-            >
-              Auth / Login
-            </button>
+            {/* Login / Logout Button */}
+            {isAuthenticated ? (
+              <button
+                onClick={onLogout}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 transition shadow-xs"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
+              </button>
+            ) : (
+              <button
+                onClick={openAuthModal}
+                className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 transition shadow-xs"
+              >
+                Auth / Login
+              </button>
+            )}
 
             {/* Mobile Menu Toggle */}
             <button
@@ -279,6 +294,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button onClick={() => onSelectRole('admin')} className="px-2 py-1 text-[11px] bg-purple-100 text-purple-800 rounded font-semibold">Admin</button>
             </div>
           </div>
+          <button
+            onClick={() => {
+              onLogout();
+              setMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
         </div>
       )}
     </header>

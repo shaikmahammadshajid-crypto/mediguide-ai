@@ -26,8 +26,10 @@ import {
 } from './types';
 
 import { 
+  getCurrentSessionProfile,
   getUserProfile, 
   saveUserProfile, 
+  logoutUser,
   switchDemoRole, 
   fetchDiseases, 
   saveDisease, 
@@ -48,7 +50,7 @@ import {
   deleteReminder 
 } from './lib/firebase';
 
-import { INITIAL_PATIENT_PROFILE, MOCK_APPOINTMENTS } from './data/mockData';
+import { MOCK_APPOINTMENTS } from './data/mockData';
 
 export default function App() {
   const isSecureReportShare = typeof window !== 'undefined'
@@ -64,7 +66,8 @@ export default function App() {
 function MediGuideApp() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [darkMode, setDarkMode] = useState<boolean>(false);
-  const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PATIENT_PROFILE);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   
   // Data State
   const [diseases, setDiseases] = useState<Disease[]>([]);
@@ -91,41 +94,52 @@ function MediGuideApp() {
     }
   }, [darkMode]);
 
-  // Load Data on Mount
+  const loadWorkspaceData = async (profile: UserProfile) => {
+    const dis = await fetchDiseases();
+    setDiseases(dis);
+
+    const meds = await fetchMedicines();
+    setMedicines(meds);
+
+    const recs = await fetchMedicalRecords(profile.uid);
+    setMedicalRecords(recs);
+
+    const ords = await fetchOrders(profile.uid);
+    setOrders(ords);
+
+    const metrics = await fetchHealthMetrics(profile.uid);
+    setHealthMetrics(metrics);
+
+    const rems = await fetchReminders(profile.uid);
+    setReminders(rems);
+  };
+
+  // Restore auth session on mount
   useEffect(() => {
-    async function loadAllData() {
+    async function restoreSession() {
       try {
-        const profile = await getUserProfile(userProfile.uid);
-        if (profile) setUserProfile(profile);
-
-        const dis = await fetchDiseases();
-        setDiseases(dis);
-
-        const meds = await fetchMedicines();
-        setMedicines(meds);
-
-        const recs = await fetchMedicalRecords(userProfile.uid);
-        setMedicalRecords(recs);
-
-        const ords = await fetchOrders(userProfile.uid);
-        setOrders(ords);
-
-        const metrics = await fetchHealthMetrics(userProfile.uid);
-        setHealthMetrics(metrics);
-
-        const rems = await fetchReminders(userProfile.uid);
-        setReminders(rems);
+        const sessionProfile = await getCurrentSessionProfile();
+        if (sessionProfile) {
+          setUserProfile(sessionProfile);
+          await loadWorkspaceData(sessionProfile);
+        } else {
+          setIsAuthModalOpen(true);
+        }
       } catch (err) {
-        console.warn("Initial data load error:", err);
+        console.warn("Session restore error:", err);
+      } finally {
+        setAuthLoading(false);
       }
     }
-    loadAllData();
-  }, [userProfile.uid]);
+    restoreSession();
+  }, []);
 
   // Role Switcher Handler
   const handleSelectRole = async (role: 'patient' | 'doctor' | 'admin') => {
+    if (!userProfile) return;
     const updated = await switchDemoRole(role);
     setUserProfile(updated);
+    await loadWorkspaceData(updated);
     if (role === 'admin') {
       const allOrds = await fetchAllOrdersForAdmin();
       setOrders(allOrds);
@@ -137,6 +151,10 @@ function MediGuideApp() {
 
   // Cart Actions
   const handleAddToCart = (medicine: Medicine, quantity: number) => {
+    if (!userProfile) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setCartItems(prev => {
       const existingIdx = prev.findIndex(item => item.medicine.id === medicine.id);
       if (existingIdx >= 0) {
@@ -175,6 +193,18 @@ function MediGuideApp() {
     setOrders(prev => [newOrder, ...prev]);
   };
 
+  const handleLogout = async () => {
+    await logoutUser();
+    setUserProfile(null);
+    setCartItems([]);
+    setMedicalRecords([]);
+    setOrders([]);
+    setHealthMetrics([]);
+    setReminders([]);
+    setCurrentTab('dashboard');
+    setIsAuthModalOpen(true);
+  };
+
   // Disease -> Pharmacy Filter Redirect
   const handleSelectDiseaseMeds = (diseaseId: string) => {
     setSelectedDiseaseFilterForPharmacy(diseaseId);
@@ -182,6 +212,41 @@ function MediGuideApp() {
   };
 
   const cartTotalCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-700 dark:text-slate-200">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-xs text-center space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-teal-600 text-white mx-auto flex items-center justify-center font-extrabold">MG</div>
+          <p className="text-sm font-bold">Checking secure session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-xl text-center space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-teal-600 text-white mx-auto flex items-center justify-center font-extrabold text-lg">MG</div>
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">MediGuide Secure Patient Portal</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Sign in to access your private dashboard, reports, orders, reminders, and QR shares. New users can register first.
+          </p>
+        </div>
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          canClose={false}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthSuccess={async (profile) => {
+            setUserProfile(profile);
+            setIsAuthModalOpen(false);
+            await loadWorkspaceData(profile);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200 flex flex-col">
@@ -200,6 +265,8 @@ function MediGuideApp() {
         openCart={() => setIsCartOpen(true)}
         onSelectRole={handleSelectRole}
         openAuthModal={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
+        isAuthenticated={Boolean(userProfile)}
       />
 
       {/* Main App Workspace */}
@@ -337,6 +404,7 @@ function MediGuideApp() {
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={(profile) => {
           setUserProfile(profile);
+          loadWorkspaceData(profile);
         }}
       />
 

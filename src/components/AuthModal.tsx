@@ -17,11 +17,12 @@ import { UserProfile } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
+  canClose?: boolean;
   onClose: () => void;
   onAuthSuccess: (profile: UserProfile) => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, canClose = true, onClose, onAuthSuccess }) => {
   const [mode, setMode] = useState<'login' | 'signup' | 'phone' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
 
     try {
       if (mode === 'login') {
-        const profile = await loginWithEmail(email || 'sarah.jenkins@mediguide.ai', password || 'password123');
+        const profile = await loginWithEmail(email, password);
         onAuthSuccess(profile);
         onClose();
       } else if (mode === 'signup') {
@@ -56,9 +57,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
           setOtpSent(true);
           setMsg('SMS OTP Code sent to ' + phone + '. Enter 123456 to verify.');
         } else {
-          const profile = await loginWithEmail('phone.user@mediguide.ai', 'pass123');
-          onAuthSuccess(profile);
-          onClose();
+          if (otp !== '123456') {
+            setMsg('Invalid OTP. Use 123456 for this demo verification.');
+            return;
+          }
+          setMode('signup');
+          setEmail('');
+          setPassword('');
+          setFullName('');
+          setMsg('Phone verified. Complete registration with your name, email, and password.');
         }
       }
     } catch (err: any) {
@@ -85,9 +92,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 space-y-4 shadow-2xl relative">
         
-        <button onClick={onClose} className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600">
-          <X className="w-5 h-5" />
-        </button>
+        {canClose && (
+          <button onClick={onClose} className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        )}
 
         <div className="text-center space-y-1">
           <div className="w-12 h-12 rounded-xl bg-teal-600 text-white flex items-center justify-center mx-auto shadow-md">
@@ -100,7 +109,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
             {mode === 'forgot' && 'Reset Password'}
           </h2>
           <p className="text-xs text-slate-400">
-            Secure ABDM & DISHA compliant healthcare session management
+            Sign in before accessing personal medical records, orders, and reports
           </p>
         </div>
 
@@ -146,6 +155,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
               <input
                 type="password"
                 required
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

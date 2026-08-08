@@ -68,12 +68,20 @@ const LOCAL_STORAGE_RECORDS = 'mediguide_records_db';
 const LOCAL_STORAGE_ORDERS = 'mediguide_orders_db';
 const LOCAL_STORAGE_METRICS = 'mediguide_metrics_db';
 const LOCAL_STORAGE_REMINDERS = 'mediguide_reminders_db';
+const LOCAL_STORAGE_ACCOUNTS = 'mediguide_registered_accounts';
+const LOCAL_STORAGE_SESSION = 'mediguide_active_session_uid';
+
+type LocalAccount = {
+  uid: string;
+  email: string;
+  password: string;
+  profile: UserProfile;
+  lastLoginAt?: string;
+  createdAt: string;
+};
 
 // Initialize LocalStorage Defaults if empty
 export function initLocalData() {
-  if (!localStorage.getItem(LOCAL_STORAGE_USER)) {
-    localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(INITIAL_PATIENT_PROFILE));
-  }
   if (!localStorage.getItem(LOCAL_STORAGE_DISEASES)) {
     localStorage.setItem(LOCAL_STORAGE_DISEASES, JSON.stringify(MOCK_DISEASES));
   }
@@ -97,31 +105,99 @@ export function initLocalData() {
 // Ensure init on module load
 initLocalData();
 
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const getLocalAccounts = (): LocalAccount[] => {
+  const saved = localStorage.getItem(LOCAL_STORAGE_ACCOUNTS);
+  return saved ? JSON.parse(saved) : [];
+};
+
+const saveLocalAccounts = (accounts: LocalAccount[]) => {
+  localStorage.setItem(LOCAL_STORAGE_ACCOUNTS, JSON.stringify(accounts));
+};
+
+function seedWorkspaceForUser(userId: string) {
+  const savedMetrics = localStorage.getItem(LOCAL_STORAGE_METRICS);
+  const metrics: HealthMetric[] = savedMetrics ? JSON.parse(savedMetrics) : MOCK_HEALTH_METRICS;
+  const hasMetrics = metrics.some((metric) => metric.userId === userId);
+  if (!hasMetrics) {
+    localStorage.setItem(LOCAL_STORAGE_METRICS, JSON.stringify([
+      ...metrics,
+      ...MOCK_HEALTH_METRICS.map((metric) => ({
+        ...metric,
+        id: `${userId}_${metric.id}`,
+        userId
+      }))
+    ]));
+  }
+
+  const savedReminders = localStorage.getItem(LOCAL_STORAGE_REMINDERS);
+  const reminders: Reminder[] = savedReminders ? JSON.parse(savedReminders) : MOCK_REMINDERS;
+  const hasReminders = reminders.some((reminder) => reminder.userId === userId);
+  if (!hasReminders) {
+    localStorage.setItem(LOCAL_STORAGE_REMINDERS, JSON.stringify([
+      ...reminders,
+      ...MOCK_REMINDERS.map((reminder) => ({
+        ...reminder,
+        id: `${userId}_${reminder.id}`,
+        userId
+      }))
+    ]));
+  }
+}
+
 // --- AUTH FUNCTIONS ---
 export async function loginWithEmail(email: string, pass: string): Promise<UserProfile> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !pass) {
+    throw new Error('Email and password are required.');
+  }
+
   try {
     if (auth) {
-      const res = await signInWithEmailAndPassword(auth, email, pass);
+      const res = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
       const profile = await getUserProfile(res.user.uid);
-      if (profile) return profile;
+      if (profile) {
+        localStorage.setItem(LOCAL_STORAGE_SESSION, profile.uid);
+        localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(profile));
+        return profile;
+      }
     }
   } catch (err) {
     console.warn("Firebase email auth fallback:", err);
   }
 
-  // Fallback demo auth
-  const saved = localStorage.getItem(LOCAL_STORAGE_USER);
-  const current: UserProfile = saved ? JSON.parse(saved) : INITIAL_PATIENT_PROFILE;
-  current.email = email;
-  localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(current));
-  return current;
+  const accounts = getLocalAccounts();
+  const account = accounts.find((item) => item.email === normalizedEmail);
+  if (!account || account.password !== pass) {
+    throw new Error('Invalid login. Register first or enter the correct password.');
+  }
+
+  account.lastLoginAt = new Date().toISOString();
+  saveLocalAccounts(accounts);
+  seedWorkspaceForUser(account.uid);
+  localStorage.setItem(LOCAL_STORAGE_SESSION, account.uid);
+  localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(account.profile));
+  return account.profile;
 }
 
 export async function signUpWithEmail(email: string, pass: string, fullName: string): Promise<UserProfile> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !pass || !fullName.trim()) {
+    throw new Error('Name, email, and password are required.');
+  }
+  if (pass.length < 6) {
+    throw new Error('Password must be at least 6 characters.');
+  }
+  const accounts = getLocalAccounts();
+  if (accounts.some((account) => account.email === normalizedEmail)) {
+    throw new Error('This email is already registered. Please sign in.');
+  }
+
   let uid = 'user_' + Date.now();
   try {
     if (auth) {
-      const res = await createUserWithEmailAndPassword(auth, email, pass);
+      const res = await createUserWithEmailAndPassword(auth, normalizedEmail, pass);
       uid = res.user.uid;
     }
   } catch (err) {
@@ -132,12 +208,24 @@ export async function signUpWithEmail(email: string, pass: string, fullName: str
     ...INITIAL_PATIENT_PROFILE,
     uid,
     fullName,
-    email,
+    email: normalizedEmail,
     role: 'patient',
     createdAt: new Date().toISOString()
   };
 
   await saveUserProfile(newProfile);
+  accounts.push({
+    uid,
+    email: normalizedEmail,
+    password: pass,
+    profile: newProfile,
+    createdAt: newProfile.createdAt || new Date().toISOString(),
+    lastLoginAt: new Date().toISOString()
+  });
+  saveLocalAccounts(accounts);
+  seedWorkspaceForUser(uid);
+  localStorage.setItem(LOCAL_STORAGE_SESSION, uid);
+  localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(newProfile));
   return newProfile;
 }
 
@@ -163,11 +251,7 @@ export async function loginWithGoogle(): Promise<UserProfile> {
     console.warn("Google login popup fallback:", err);
   }
 
-  const saved = localStorage.getItem(LOCAL_STORAGE_USER);
-  const current: UserProfile = saved ? JSON.parse(saved) : INITIAL_PATIENT_PROFILE;
-  current.fullName = 'Google Demo User';
-  localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(current));
-  return current;
+  throw new Error('Google login is unavailable. Please sign in or register with email.');
 }
 
 export async function resetPassword(email: string): Promise<void> {
@@ -187,26 +271,27 @@ export async function switchDemoRole(role: 'patient' | 'doctor' | 'admin'): Prom
   if (role === 'admin') {
     current = {
       ...current,
-      uid: 'demo_admin_999',
-      fullName: 'Dr. Ananya Sen (Chief Admin)',
-      email: 'admin.ananya@mediguide.ai',
       role: 'admin'
     };
   } else if (role === 'doctor') {
     current = {
       ...current,
-      uid: 'demo_doctor_888',
-      fullName: 'Dr. Rajesh Verma, MD (AIIMS Delhi)',
-      email: 'rajesh.verma@mediguide.ai',
       role: 'doctor'
     };
   } else {
     current = {
-      ...INITIAL_PATIENT_PROFILE
+      ...current,
+      role: 'patient'
     };
   }
 
   localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(current));
+  const accounts = getLocalAccounts();
+  const idx = accounts.findIndex((account) => account.uid === current.uid);
+  if (idx >= 0) {
+    accounts[idx].profile = current;
+    saveLocalAccounts(accounts);
+  }
   if (db && current.uid) {
     try {
       await setDoc(doc(db, 'users', current.uid), current, { merge: true });
@@ -225,6 +310,26 @@ export async function logoutUser(): Promise<void> {
   } catch (err) {
     console.warn("Signout error:", err);
   }
+  localStorage.removeItem(LOCAL_STORAGE_SESSION);
+  localStorage.removeItem(LOCAL_STORAGE_USER);
+}
+
+export async function getCurrentSessionProfile(): Promise<UserProfile | null> {
+  const activeUid = localStorage.getItem(LOCAL_STORAGE_SESSION);
+  if (!activeUid) return null;
+
+  const accounts = getLocalAccounts();
+  const account = accounts.find((item) => item.uid === activeUid);
+  if (account) {
+    seedWorkspaceForUser(account.uid);
+    localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(account.profile));
+    return account.profile;
+  }
+
+  const saved = localStorage.getItem(LOCAL_STORAGE_USER);
+  if (!saved) return null;
+  const profile: UserProfile = JSON.parse(saved);
+  return profile.uid === activeUid ? profile : null;
 }
 
 // --- USER PROFILE FIRESTORE ---
@@ -240,13 +345,25 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     console.warn("Firestore getUserProfile fallback:", err);
   }
 
+  const accounts = getLocalAccounts();
+  const account = accounts.find((item) => item.uid === uid);
+  if (account) return account.profile;
+
   const saved = localStorage.getItem(LOCAL_STORAGE_USER);
-  return saved ? JSON.parse(saved) : INITIAL_PATIENT_PROFILE;
+  if (!saved) return null;
+  const profile: UserProfile = JSON.parse(saved);
+  return profile.uid === uid ? profile : null;
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   profile.updatedAt = new Date().toISOString();
   localStorage.setItem(LOCAL_STORAGE_USER, JSON.stringify(profile));
+  const accounts = getLocalAccounts();
+  const idx = accounts.findIndex((account) => account.uid === profile.uid);
+  if (idx >= 0) {
+    accounts[idx].profile = profile;
+    saveLocalAccounts(accounts);
+  }
 
   try {
     if (db && profile.uid) {
@@ -373,7 +490,7 @@ export async function fetchMedicalRecords(userId: string): Promise<MedicalRecord
 
   const saved = localStorage.getItem(LOCAL_STORAGE_RECORDS);
   const records: MedicalRecord[] = saved ? JSON.parse(saved) : MOCK_RECORDS;
-  return records.filter(r => r.userId === userId || userId === 'demo_patient_123');
+  return records.filter(r => r.userId === userId);
 }
 
 export async function addMedicalRecord(record: MedicalRecord): Promise<void> {
@@ -422,7 +539,7 @@ export async function fetchOrders(userId: string): Promise<Order[]> {
 
   const saved = localStorage.getItem(LOCAL_STORAGE_ORDERS);
   const orders: Order[] = saved ? JSON.parse(saved) : MOCK_ORDERS;
-  return orders;
+  return orders.filter((order) => order.userId === userId);
 }
 
 export async function fetchAllOrdersForAdmin(): Promise<Order[]> {
@@ -477,35 +594,53 @@ export async function updateOrderStatus(orderId: string, status: Order['orderSta
 // --- HEALTH METRICS FIRESTORE ---
 export async function fetchHealthMetrics(userId: string): Promise<HealthMetric[]> {
   const saved = localStorage.getItem(LOCAL_STORAGE_METRICS);
-  if (!saved) return MOCK_HEALTH_METRICS;
+  if (!saved) {
+    const seeded = MOCK_HEALTH_METRICS.map((metric) => ({ ...metric, id: `${userId}_${metric.id}`, userId }));
+    localStorage.setItem(LOCAL_STORAGE_METRICS, JSON.stringify(seeded));
+    return seeded;
+  }
 
   const current: HealthMetric[] = JSON.parse(saved);
   const currentUserMetrics = current.filter((metric) => metric.userId === userId);
-  if (currentUserMetrics.length >= 31) return current;
+  if (currentUserMetrics.length >= 31) return currentUserMetrics;
 
   const existingDates = new Set(current.map((metric) => `${metric.userId}:${metric.date}`));
-  const backfilled = [
-    ...current,
-    ...MOCK_HEALTH_METRICS.filter((metric) => !existingDates.has(`${metric.userId}:${metric.date}`))
-  ];
+  const userBackfill = MOCK_HEALTH_METRICS
+    .map((metric) => ({ ...metric, id: `${userId}_${metric.id}`, userId }))
+    .filter((metric) => !existingDates.has(`${metric.userId}:${metric.date}`));
+  const backfilled = [...current, ...userBackfill];
   localStorage.setItem(LOCAL_STORAGE_METRICS, JSON.stringify(backfilled));
-  return backfilled;
+  return backfilled.filter((metric) => metric.userId === userId);
 }
 
 export async function saveHealthMetric(metric: HealthMetric): Promise<void> {
-  const current = await fetchHealthMetrics(metric.userId);
-  current.push(metric);
+  const saved = localStorage.getItem(LOCAL_STORAGE_METRICS);
+  const current: HealthMetric[] = saved ? JSON.parse(saved) : [];
+  const idx = current.findIndex((item) => item.id === metric.id);
+  if (idx >= 0) {
+    current[idx] = metric;
+  } else {
+    current.push(metric);
+  }
   localStorage.setItem(LOCAL_STORAGE_METRICS, JSON.stringify(current));
 }
 
 // --- REMINDERS ---
 export async function fetchReminders(userId: string): Promise<Reminder[]> {
   const saved = localStorage.getItem(LOCAL_STORAGE_REMINDERS);
-  return saved ? JSON.parse(saved) : MOCK_REMINDERS;
+  if (!saved) {
+    const seeded = MOCK_REMINDERS.map((reminder) => ({ ...reminder, id: `${userId}_${reminder.id}`, userId }));
+    localStorage.setItem(LOCAL_STORAGE_REMINDERS, JSON.stringify(seeded));
+    return seeded;
+  }
+
+  const reminders: Reminder[] = JSON.parse(saved);
+  return reminders.filter((reminder) => reminder.userId === userId);
 }
 
 export async function saveReminder(reminder: Reminder): Promise<void> {
-  const current = await fetchReminders(reminder.userId);
+  const saved = localStorage.getItem(LOCAL_STORAGE_REMINDERS);
+  const current: Reminder[] = saved ? JSON.parse(saved) : [];
   const idx = current.findIndex(r => r.id === reminder.id);
   if (idx >= 0) {
     current[idx] = reminder;
@@ -516,7 +651,8 @@ export async function saveReminder(reminder: Reminder): Promise<void> {
 }
 
 export async function deleteReminder(id: string): Promise<void> {
-  let current = await fetchReminders('demo');
+  const saved = localStorage.getItem(LOCAL_STORAGE_REMINDERS);
+  let current: Reminder[] = saved ? JSON.parse(saved) : MOCK_REMINDERS;
   current = current.filter(r => r.id !== id);
   localStorage.setItem(LOCAL_STORAGE_REMINDERS, JSON.stringify(current));
 }
